@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}仪表盘{% endblock %}
+{% block content %}
+<h4>系统概览</h4>
+<div class="row mb-4" id="stats-cards">
+    <div class="col-md-3"><div class="card text-white bg-primary"><div class="card-body"><h6>总帖子</h6><h3 id="total-posts">-</h3></div></div></div>
+    <div class="col-md-3"><div class="card text-white bg-success"><div class="card-body"><h6>总评论</h6><h3 id="total-comments">-</h3></div></div></div>
+    <div class="col-md-3"><div class="card text-white bg-info"><div class="card-body"><h6>已分析</h6><h3 id="analyzed">-</h3></div></div></div>
+    <div class="col-md-3"><div class="card text-white bg-warning"><div class="card-body"><h6>平台数</h6><h3 id="platforms">-</h3></div></div></div>
+</div>
+
+<h5>平台状态</h5>
+<div id="platform-status" class="mb-4"></div>
+
+<h5>最近运行记录</h5>
+<div class="table-responsive">
+    <table class="table table-sm table-striped">
+        <thead><tr><th>平台</th><th>关键词</th><th>开始时间</th><th>状态</th><th>帖子数</th><th>错误</th></tr></thead>
+        <tbody id="recent-runs"></tbody>
+    </table>
+</div>
+
+<h5>情感分布</h5>
+<div id="sentiment-dist" class="mb-3"></div>
+
+<script>
+async function loadDashboard() {
+    try {
+        const stats = await (await fetch('/api/dashboard/stats')).json();
+        document.getElementById('total-posts').textContent = stats.total_posts;
+        document.getElementById('total-comments').textContent = stats.total_comments;
+        const analyzed = stats.sentiment_distribution.filter(s => s.sentiment !== '未分析').reduce((a,b) => a + b.count, 0);
+        document.getElementById('analyzed').textContent = analyzed;
+        document.getElementById('platforms').textContent = stats.by_platform.length;
+
+        const tbody = document.getElementById('recent-runs');
+        tbody.innerHTML = stats.recent_runs.map(r => `<tr>
+            <td><span class="badge bg-secondary">${r.platform}</span></td>
+            <td>${r.keyword}</td>
+            <td>${r.started_at || ''}</td>
+            <td><span class="badge bg-${r.status==='success'?'success':r.status==='error'?'danger':'warning'}">${r.status}</span></td>
+            <td>${r.posts_found}</td>
+            <td class="text-danger small">${r.error_message || ''}</td>
+        </tr>`).join('');
+
+        const sd = document.getElementById('sentiment-dist');
+        sd.innerHTML = stats.sentiment_distribution.map(s => {
+            const cls = s.sentiment === 'positive' ? 'success' : s.sentiment === 'negative' ? 'danger' : 'secondary';
+            return `<span class="badge bg-${cls} me-2">${s.sentiment}: ${s.count}</span>`;
+        }).join('');
+    } catch(e) { console.error(e); }
+
+    try {
+        const platforms = await (await fetch('/api/dashboard/platforms')).json();
+        const NAMES = {weibo:'微博', wechat:'微信', maimai:'脉脉', xiaohongshu:'小红书'};
+        const AUTH_LABEL = {active:'已认证', expired:'已过期', inactive:'未登录'};
+        const AUTH_BG = {active:'success', expired:'danger', inactive:'secondary'};
+        const el = document.getElementById('platform-status');
+        el.innerHTML = '<div class="row">' + platforms.map(p => {
+            const authBg = AUTH_BG[p.auth_status] || 'secondary';
+            const authLabel = AUTH_LABEL[p.auth_status] || p.auth_status;
+            const borderColor = p.auth_status === 'active' ? 'success' : p.auth_status === 'expired' ? 'danger' : 'secondary';
+            return `
+            <div class="col-md-3 mb-2">
+                <div class="card border-${borderColor}">
+                    <div class="card-body py-2">
+                        <strong>${NAMES[p.name]||p.name}</strong>
+                        <span class="badge bg-${p.enabled?'success':'secondary'} float-end">${p.enabled?'启用':'禁用'}</span>
+                        <div class="mt-1">
+                            <span class="badge bg-${authBg}">认证: ${authLabel}</span>
+                        </div>
+                        <small class="text-muted">${p.last_validated ? '验证于 '+p.last_validated.substring(0,16) : '从未验证'}</small><br>
+                        <small>间隔: ${p.interval_hours}h | 关键词: ${p.keywords.join(', ')}</small>
+                    </div>
+                </div>
+            </div>`;
+        }).join('') + '</div>';
+    } catch(e) { console.error(e); }
+}
+loadDashboard();
+setInterval(loadDashboard, 30000);
+</script>
+{% endblock %}

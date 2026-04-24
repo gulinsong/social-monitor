@@ -1,0 +1,80 @@
+app:
+  name: "社媒监控系统"
+  host: "0.0.0.0"
+  port: 5000
+  secret_key: "change-me-in-production"
+  db_path: "db/monitor.db"
+  log_dir: "logs"
+  password: "admin123"
+
+default_keywords: ["迪子"]
+
+feishu:
+  enabled: false
+  webhook_url: ""
+  sign_secret: ""
+  push_new_posts: true
+  push_new_comments: false
+  max_push_per_run: 50
+
+sentiment:
+  snowNLP: true
+  custom_dict: "analysis/custom_dict.txt"
+  llm:
+    enabled: false
+    api_url: ""
+    api_key: ""
+    model: ""
+
+platforms:
+  weibo:
+    enabled: true
+    interval_hours: 6
+    keywords: ["迪子"]
+    cookies: ""
+    max_pages_per_keyword: 3
+    max_comments_per_post: 20
+    request_delay:
+      min: 3.0
+      max: 8.0
+    max_requests_per_hour: 60
+
+  wechat:
+    enabled: true
+    interval_hours: 6
+    keywords: ["迪子"]
+    sogou:
+      enabled: true
+      max_pages: 5
+      request_delay:
+        min: 3.0
+        max: 6.0
+    weread:
+      enabled: true
+      proxy_url: "https://weread.111965.xyz"
+      request_delay:
+        min: 2.0
+        max: 4.0
+
+  maimai:
+    enabled: false
+    interval_hours: 8
+    keywords: ["迪子"]
+    cookies: ""
+    request_delay:
+      min: 15.0
+      max: 30.0
+    max_requests_per_hour: 30
+
+  xiaohongshu:
+    enabled: false
+    interval_hours: 6
+    keywords: ["迪子"]
+    cookies:
+      a1: ""
+      webId: ""
+      web_session: ""
+    request_delay:
+      min: 5.0
+      max: 15.0
+    max_requests_per_hour: 40

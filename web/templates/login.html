@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}登录{% endblock %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">系统登录</h5></div>
+            <div class="card-body">
+                <div id="login-error" class="alert alert-danger" style="display:none"></div>
+                {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+                <form id="login-form" method="POST" action="/login">
+                    <div class="mb-3">
+                        <label class="form-label">密码</label>
+                        <input type="password" name="password" id="login-password" class="form-control" autofocus>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">登录</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

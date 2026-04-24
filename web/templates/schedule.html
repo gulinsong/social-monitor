@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}调度配置{% endblock %}
+{% block content %}
+<h4>调度配置</h4>
+<div id="config-cards"></div>
+
+<h5 class="mt-4">全局关键词</h5>
+<div class="row mb-3">
+  <div class="col-md-6">
+    <div class="input-group">
+      <input type="text" id="global-keywords" class="form-control" placeholder="关键词，逗号分隔">
+      <button class="btn btn-primary" onclick="saveGlobalKeywords()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const PLATFORM_NAMES = {weibo:'微博', wechat:'微信', maimai:'脉脉', xiaohongshu:'小红书'};
+
+async function loadConfig() {
+    const resp = await fetch('/api/config/platforms');
+    const data = await resp.json();
+    const el = document.getElementById('config-cards');
+    el.innerHTML = '<div class="row">' + Object.entries(data).map(([name, cfg]) => `
+    <div class="col-md-6 mb-3">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>${PLATFORM_NAMES[name] || name}</strong>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="enabled-${name}"
+                   ${cfg.enabled?'checked':''} onchange="togglePlatform('${name}', this.checked)">
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row mb-2">
+            <label class="col-sm-4 col-form-label">爬取间隔(小时)</label>
+            <div class="col-sm-4">
+              <input type="number" class="form-control form-control-sm" id="interval-${name}"
+                     value="${cfg.interval_hours}" min="1" max="48">
+            </div>
+            <div class="col-sm-4">
+              <button class="btn btn-sm btn-outline-primary" onclick="saveInterval('${name}')">保存</button>
+            </div>
+          </div>
+          <div class="row mb-2">
+            <label class="col-sm-4 col-form-label">关键词</label>
+            <div class="col-sm-8">
+              <input type="text" class="form-control form-control-sm" id="keywords-${name}"
+                     value="${cfg.keywords.join(',')}">
+            </div>
+          </div>
+          <div class="row mb-2">
+            <label class="col-sm-4 col-form-label">限速范围(秒)</label>
+            <div class="col-sm-4">
+              <input type="number" class="form-control form-control-sm" id="delay-min-${name}"
+                     value="${cfg.request_delay.min}" step="0.5" min="1">
+            </div>
+            <div class="col-sm-4">
+              <input type="number" class="form-control form-control-sm" id="delay-max-${name}"
+                     value="${cfg.request_delay.max}" step="0.5" min="1">
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-sm-12 text-end">
+              <button class="btn btn-sm btn-primary" onclick="savePlatform('${name}')">保存全部</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`).join('') + '</div>';
+
+    // 加载全局关键词
+    const kwResp = await fetch('/api/config/keywords');
+    const kwData = await kwResp.json();
+    document.getElementById('global-keywords').value = kwData.keywords.join(',');
+}
+
+async function togglePlatform(name, enabled) {
+    await fetch(`/api/config/platforms/${name}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({enabled})
+    });
+}
+
+async function saveInterval(name) {
+    const interval = parseFloat(document.getElementById(`interval-${name}`).value);
+    await fetch(`/api/config/platforms/${name}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({interval_hours: interval})
+    });
+    alert('已保存');
+}
+
+async function savePlatform(name) {
+    const keywords = document.getElementById(`keywords-${name}`).value.split(',').map(s=>s.trim()).filter(Boolean);
+    const min = parseFloat(document.getElementById(`delay-min-${name}`).value);
+    const max = parseFloat(document.getElementById(`delay-max-${name}`).value);
+    await fetch(`/api/config/platforms/${name}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({keywords, request_delay: {min, max}})
+    });
+    alert('已保存');
+}
+
+async function saveGlobalKeywords() {
+    const keywords = document.getElementById('global-keywords').value.split(',').map(s=>s.trim()).filter(Boolean);
+    await fetch('/api/config/keywords', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({keywords})
+    });
+    alert('已保存');
+}
+
+loadConfig();
+</script>
+{% endblock %}

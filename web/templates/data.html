@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}数据浏览{% endblock %}
+{% block content %}
+<h4>数据浏览</h4>
+
+<div class="row mb-3">
+  <div class="col-md-2">
+    <select id="filter-platform" class="form-select form-select-sm" onchange="loadPosts(1)">
+      <option value="">全部平台</option>
+      <option value="weibo">微博</option>
+      <option value="wechat">微信</option>
+      <option value="maimai">脉脉</option>
+      <option value="xiaohongshu">小红书</option>
+    </select>
+  </div>
+  <div class="col-md-2">
+    <select id="filter-sentiment" class="form-select form-select-sm" onchange="loadPosts(1)">
+      <option value="">全部情感</option>
+      <option value="positive">正面</option>
+      <option value="negative">负面</option>
+      <option value="neutral">中性</option>
+    </select>
+  </div>
+  <div class="col-md-3">
+    <input type="text" id="filter-keyword" class="form-control form-control-sm" placeholder="搜索关键词..." onkeyup="debounceSearch()">
+  </div>
+  <div class="col-md-2">
+    <a href="/api/data/export?format=csv" class="btn btn-sm btn-outline-success">导出CSV</a>
+  </div>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-sm table-hover">
+    <thead class="table-dark">
+      <tr><th>平台</th><th>标题/内容</th><th>作者</th><th>关键词</th><th>情感</th><th>时间</th><th>操作</th></tr>
+    </thead>
+    <tbody id="posts-tbody"></tbody>
+  </table>
+</div>
+
+<nav>
+  <ul class="pagination pagination-sm" id="pagination"></ul>
+</nav>
+
+<div class="modal fade" id="detailModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title" id="detail-title"></h5></div>
+      <div class="modal-body" id="detail-body"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let searchTimer;
+function debounceSearch() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => loadPosts(1), 500);
+}
+
+async function loadPosts(page) {
+    const platform = document.getElementById('filter-platform').value;
+    const sentiment = document.getElementById('filter-sentiment').value;
+    const keyword = document.getElementById('filter-keyword').value;
+    const params = new URLSearchParams({page, per_page: 15});
+    if (platform) params.set('platform', platform);
+    if (sentiment) params.set('sentiment', sentiment);
+    if (keyword) params.set('keyword', keyword);
+
+    const resp = await fetch(`/api/data/posts?${params}`);
+    const data = await resp.json();
+
+    const tbody = document.getElementById('posts-tbody');
+    tbody.innerHTML = data.posts.map(p => {
+        const sentCls = p.sentiment === 'positive' ? 'success' : p.sentiment === 'negative' ? 'danger' : 'secondary';
+        const sentText = p.sentiment === 'positive' ? '正面' : p.sentiment === 'negative' ? '负面' : p.sentiment === 'neutral' ? '中性' : '未分析';
+        const content = (p.title || p.content || '').substring(0, 60);
+        return `<tr>
+            <td><span class="badge bg-secondary">${p.platform}</span></td>
+            <td title="${(p.title||'')+' '+(p.content||'')}">${content}${content.length>=60?'...':''}</td>
+            <td>${p.user_name || '-'}</td>
+            <td>${p.keyword || '-'}</td>
+            <td><span class="badge bg-${sentCls}">${sentText}</span> ${p.sentiment_score ? p.sentiment_score.toFixed(2) : ''}</td>
+            <td class="small">${(p.created_at||'').substring(0,10)}</td>
+            <td><button class="btn btn-sm btn-outline-info" onclick="showDetail('${p.id}','${p.platform}')">详情</button></td>
+        </tr>`;
+    }).join('');
+
+    // 分页
+    const pg = document.getElementById('pagination');
+    let html = '';
+    for (let i = 1; i <= data.total_pages; i++) {
+        html += `<li class="page-item ${i===data.page?'active':''}"><a class="page-link" href="#" onclick="loadPosts(${i});return false;">${i}</a></li>`;
+    }
+    pg.innerHTML = html;
+    document.getElementById('total-info') && document.getElementById('total-info').remove();
+    tbody.parentElement.insertAdjacentHTML('afterend',
+        `<small id="total-info" class="text-muted">共 ${data.total} 条，第 ${data.page}/${data.total_pages} 页</small>`);
+}
+
+async function showDetail(postId, platform) {
+    const resp = await fetch(`/api/data/posts?per_page=1`);
+    const allResp = await fetch(`/api/data/posts?per_page=200`);
+    const allData = await allResp.json();
+    const post = allData.posts.find(p => p.id === postId);
+    if (!post) return;
+
+    document.getElementById('detail-title').textContent = post.title || post.content.substring(0, 50);
+    let body = `
+        <p><strong>平台:</strong> ${post.platform} | <strong>作者:</strong> ${post.user_name} | <strong>关键词:</strong> ${post.keyword}</p>
+        <p><strong>内容:</strong></p><p>${post.content || post.title}</p>
+        <p><strong>情感:</strong> ${post.sentiment || '未分析'} ${post.sentiment_score ? '('+post.sentiment_score.toFixed(3)+')' : ''}</p>
+        ${post.keywords ? '<p><strong>提取关键词:</strong> '+post.keywords+'</p>' : ''}
+        ${post.url ? '<p><a href="'+post.url+'" target="_blank">查看原文</a></p>' : ''}
+        <hr><h6>评论</h6><div id="comments-area">加载中...</div>`;
+    document.getElementById('detail-body').innerHTML = body;
+    new bootstrap.Modal(document.getElementById('detailModal')).show();
+
+    const cResp = await fetch(`/api/data/comments/${postId}`);
+    const cData = await cResp.json();
+    const cArea = document.getElementById('comments-area');
+    if (cData.comments.length === 0) {
+        cArea.innerHTML = '<p class="text-muted">暂无评论</p>';
+    } else {
+        cArea.innerHTML = cData.comments.map(c =>
+            `<div class="border-bottom py-1"><strong>${c.user_name}</strong> <small class="text-muted">${c.created_at}</small><br>${c.content}</div>`
+        ).join('');
+    }
+}
+
+loadPosts(1);
+</script>
+{% endblock %}

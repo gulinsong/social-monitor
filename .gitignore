@@ -1,0 +1,35 @@
+# Database
+*.db
+
+# Config (contains cookies and secrets)
+config.yaml
+
+# Tokens and credentials
+*.token
+.weread_*
+
+# Logs
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Sensitive — config contains cookies
+monitor_weibo/config.json
+
+# Data directories
+monitor_weibo/data/
+monitor_wechat/data/
+legacy/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Claude
+.claude/

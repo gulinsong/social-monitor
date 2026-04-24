@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}登录管理{% endblock %}
+{% block content %}
+<h4>平台登录管理</h4>
+<div id="platform-cards" class="row"></div>
+
+<!-- 手动输入 Cookie 模态框 -->
+<div class="modal fade" id="cookieModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">输入 Cookie</h5></div>
+      <div class="modal-body">
+        <input type="hidden" id="cookie-platform">
+        <div class="mb-3">
+          <label class="form-label">Cookie 字符串</label>
+          <textarea id="cookie-input" class="form-control" rows="5" placeholder="从浏览器开发者工具复制 Cookie..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" onclick="saveCookie()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PLATFORM_NAMES = {weibo:'微博', wechat:'微信', maimai:'脉脉', xiaohongshu:'小红书'};
+
+async function loadPlatforms() {
+    const resp = await fetch('/api/dashboard/platforms');
+    const platforms = await resp.json();
+    const el = document.getElementById('platform-cards');
+    el.innerHTML = platforms.map(p => `
+    <div class="col-md-6 col-lg-3 mb-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <h6>${PLATFORM_NAMES[p.name] || p.name}</h6>
+          <p class="mb-1">
+            认证状态:
+            <span class="badge bg-${p.auth_status==='active'?'success':'warning'}">${p.auth_status}</span>
+          </p>
+          <p class="small text-muted mb-2">${p.last_validated ? '上次验证: '+p.last_validated : '从未验证'}</p>
+          <button class="btn btn-sm btn-outline-primary me-1" onclick="openCookieModal('${p.name}')">输入Cookie</button>
+          <button class="btn btn-sm btn-outline-success" onclick="verifyAuth('${p.name}')">验证</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function openCookieModal(platform) {
+    document.getElementById('cookie-platform').value = platform;
+    document.getElementById('cookie-input').value = '';
+    new bootstrap.Modal(document.getElementById('cookieModal')).show();
+}
+
+async function saveCookie() {
+    const platform = document.getElementById('cookie-platform').value;
+    const cookies = document.getElementById('cookie-input').value.trim();
+    if (!cookies) return alert('Cookie 不能为空');
+    const resp = await fetch(`/api/auth/cookie/${platform}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({cookies})
+    });
+    const data = await resp.json();
+    if (data.status === 'ok') {
+        bootstrap.Modal.getInstance(document.getElementById('cookieModal')).hide();
+        loadPlatforms();
+        alert('Cookie 已保存');
+    }
+}
+
+async function verifyAuth(platform) {
+    const resp = await fetch(`/api/auth/status/${platform}`);
+    const data = await resp.json();
+    alert(`${PLATFORM_NAMES[platform] || platform}: ${data.auth_status}`);
+    loadPlatforms();
+}
+
+loadPlatforms();
+</script>
+{% endblock %}
