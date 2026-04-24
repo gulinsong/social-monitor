@@ -59,6 +59,10 @@ def login_qrcode(platform):
         if platform == "wechat":
             return _wechat_qrcode()
 
+        # Weibo 通过 Playwright 自动获取 Cookie
+        if platform == "weibo":
+            return _weibo_qrcode()
+
         # 其他平台：生成登录页二维码 + 手动输入Cookie提示
         url = LOGIN_URLS.get(platform)
         if not url:
@@ -91,6 +95,29 @@ def _wechat_qrcode():
     return jsonify(result)
 
 
+def _weibo_qrcode():
+    """微博 Playwright 扫码登录"""
+    try:
+        from platforms.weibo.login import WeiboQRLogin
+        login = WeiboQRLogin()
+        result = login.get_qrcode()
+        if "error" in result:
+            return jsonify(result), 400
+        _store_login_session("weibo", "browser", login)
+        return jsonify(result)
+    except ImportError:
+        log.warning("Playwright 未安装，回退到手动模式")
+        return jsonify({
+            "qr_image": _url_to_qr_base64("https://passport.weibo.cn/signin/login"),
+            "qrid": "",
+            "message": "Playwright 未安装，请手动输入Cookie",
+            "manual": True,
+        })
+    except Exception as e:
+        log.error("微博二维码获取失败: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
 @bp.route("/api/auth/check/<platform>", methods=["POST"])
 def check_login(platform):
     """轮询扫码登录状态"""
@@ -107,6 +134,15 @@ def check_login(platform):
                 token = client_obj.load_token() or ""
                 if token:
                     _save_platform_cookies(platform, f"weread_token={token}")
+            return jsonify(result)
+
+        if platform == "weibo":
+            login_obj = _get_login_session(platform, qrid)
+            if not login_obj:
+                return jsonify({"status": "error", "message": "会话已过期，请重新获取二维码"})
+            result = login_obj.check_scan(qrid)
+            if result.get("status") == "success" and result.get("cookies"):
+                _save_platform_cookies(platform, result["cookies"])
             return jsonify(result)
 
         return jsonify({"status": "waiting", "message": "该平台需手动输入Cookie"})

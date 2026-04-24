@@ -108,6 +108,7 @@ class Monitor(BaseMonitor):
 
     def _parse_post(self, mblog: dict, keyword: str = "") -> dict:
         text = self._clean_html(mblog.get("text", ""))
+        created_at = self._parse_time(mblog.get("created_at", ""))
         return {
             "id": mblog.get("mid", mblog.get("id", "")),
             "keyword": keyword,
@@ -116,7 +117,7 @@ class Monitor(BaseMonitor):
             "title": "",
             "content": text,
             "url": f"https://m.weibo.cn/detail/{mblog.get('mid', mblog.get('id', ''))}",
-            "created_at": mblog.get("created_at", ""),
+            "created_at": created_at,
             "fetched_at": datetime.now().isoformat(),
             "reposts_count": mblog.get("reposts_count", 0),
             "comments_count": mblog.get("comments_count", 0),
@@ -126,6 +127,18 @@ class Monitor(BaseMonitor):
                 "is_original": not mblog.get("retweeted_status"),
             },
         }
+
+    @staticmethod
+    def _parse_time(raw: str) -> str:
+        """将微博时间格式转为 ISO 格式"""
+        if not raw:
+            return ""
+        try:
+            from email.utils import parsedate_to_datetime
+            dt = parsedate_to_datetime(raw)
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return raw
 
     def get_comments(self, post_id: str, max_count: int = 20) -> list[dict]:
         comments = []
@@ -148,7 +161,7 @@ class Monitor(BaseMonitor):
                     "post_id": post_id,
                     "user_name": c.get("user", {}).get("screen_name", ""),
                     "content": text,
-                    "created_at": c.get("created_at", ""),
+                    "created_at": self._parse_time(c.get("created_at", "")),
                     "fetched_at": datetime.now().isoformat(),
                 })
 
