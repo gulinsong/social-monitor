@@ -34,7 +34,7 @@ cp config.example.yaml config.yaml
 app:
   password: "your-password"     # Web 登录密码
 
-default_keywords: ["迪子"]      # 全局默认关键词
+default_keywords: ["your-keyword"] # 全局默认关键词
 
 feishu:
   enabled: true
@@ -44,7 +44,7 @@ platforms:
   weibo:
     enabled: true
     interval_hours: 6
-    keywords: ["迪子"]
+    keywords: ["your-keyword"]
   # ...
 ```
 

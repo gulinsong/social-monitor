@@ -18,7 +18,6 @@ def _ensure_custom_dict(path: str = None):
             jieba.load_userdict(path)
         except Exception as e:
             log.warning("加载自定义词典失败: %s", e)
-    jieba.add_word("迪子")
     jieba.add_word("比亚迪")
     _custom_dict_loaded = True
 
