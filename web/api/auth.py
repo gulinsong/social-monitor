@@ -24,7 +24,7 @@ LOGIN_URLS = {
     "weibo": "https://weibo.com/login.php",
     "wechat": "https://weread.qq.com/",
     "maimai": "https://maimai.cn/login",
-    "xiaohongshu": "https://passport.xiaohongshu.com/login",
+    "xiaohongshu": "https://www.xiaohongshu.com/login",
 }
 
 
@@ -62,6 +62,10 @@ def login_qrcode(platform):
         # Weibo 通过 Playwright 自动获取 Cookie
         if platform == "weibo":
             return _weibo_qrcode()
+
+        # XHS 通过 Playwright 扫码登录
+        if platform == "xiaohongshu":
+            return _xhs_qrcode()
 
         # 其他平台：生成登录页二维码 + 手动输入Cookie提示
         url = LOGIN_URLS.get(platform)
@@ -118,6 +122,29 @@ def _weibo_qrcode():
         return jsonify({"error": str(e)}), 500
 
 
+def _xhs_qrcode():
+    """XHS Playwright 扫码登录"""
+    try:
+        from platforms.xiaohongshu.login import XhsQRLogin
+        login = XhsQRLogin()
+        result = login.get_qrcode()
+        if "error" in result:
+            return jsonify(result), 400
+        _store_login_session("xiaohongshu", "browser", login)
+        return jsonify(result)
+    except ImportError:
+        log.warning("Playwright 未安装，回退到手动模式")
+        return jsonify({
+            "qr_image": _url_to_qr_base64(LOGIN_URLS.get("xiaohongshu", "")),
+            "qrid": "",
+            "message": "Playwright 未安装，请手动输入Cookie",
+            "manual": True,
+        })
+    except Exception as e:
+        log.error("XHS 二维码获取失败: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
 @bp.route("/api/auth/check/<platform>", methods=["POST"])
 def check_login(platform):
     """轮询扫码登录状态"""
@@ -137,6 +164,15 @@ def check_login(platform):
             return jsonify(result)
 
         if platform == "weibo":
+            login_obj = _get_login_session(platform, qrid)
+            if not login_obj:
+                return jsonify({"status": "error", "message": "会话已过期，请重新获取二维码"})
+            result = login_obj.check_scan(qrid)
+            if result.get("status") == "success" and result.get("cookies"):
+                _save_platform_cookies(platform, result["cookies"])
+            return jsonify(result)
+
+        if platform == "xiaohongshu":
             login_obj = _get_login_session(platform, qrid)
             if not login_obj:
                 return jsonify({"status": "error", "message": "会话已过期，请重新获取二维码"})

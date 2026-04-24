@@ -29,8 +29,13 @@ class Monitor(BaseMonitor):
         try:
             resp = self._safe_request("https://m.weibo.cn/api/config")
             if not resp:
+                self._mark_auth_expired()
                 return False
             data = resp.get("data", {})
+            if not data.get("login", False):
+                self._mark_auth_expired()
+                log.warning("[微博] Cookie 已失效 (login=false)")
+                return False
             uid = data.get("uid", "")
             if uid:
                 conn = self._get_auth_conn()
@@ -42,6 +47,7 @@ class Monitor(BaseMonitor):
                 conn.close()
                 log.info("[微博] 认证有效, UID: %s****", uid[:4])
                 return True
+            self._mark_auth_expired()
             return False
         except Exception as e:
             log.warning("[微博] 认证检查失败: %s", e)
@@ -72,13 +78,18 @@ class Monitor(BaseMonitor):
 
         result.new_posts = unique
 
-        # 爬取评论
-        max_comments = self.config.get("max_comments_per_post", 20)
+        # 爬取评论（限制最多对前 5 篇有评论的帖子爬取，每篇最多 10 条）
+        max_comment_posts = self.config.get("max_comment_posts", 5)
+        max_comments = self.config.get("max_comments_per_post", 10)
+        commented = 0
         for post in unique:
+            if commented >= max_comment_posts:
+                break
             if post.get("comments_count", 0) > 0:
                 comments = self.get_comments(post["id"], max_count=max_comments)
                 if comments:
                     result.new_comments.extend(comments)
+                commented += 1
 
         return result
 
