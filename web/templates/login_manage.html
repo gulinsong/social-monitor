@@ -60,11 +60,60 @@
   </div>
 </div>
 
+<!-- 关键词编辑模态框 -->
+<div class="modal fade" id="kwModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">关键词管理 - <span id="kw-platform-label"></span></h5></div>
+      <div class="modal-body">
+        <input type="hidden" id="kw-platform">
+        <div id="kw-tags" class="d-flex flex-wrap gap-1 mb-3"></div>
+        <div class="input-group">
+          <input type="text" id="kw-input" class="form-control" placeholder="输入关键词，回车添加"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();addKeyword();}">
+          <button class="btn btn-outline-primary" onclick="addKeyword()">添加</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" onclick="saveKeywords()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 公众号管理模态框 -->
+<div class="modal fade" id="mpModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">公众号订阅管理</h5></div>
+      <div class="modal-body">
+        <div id="mp-list" class="mb-3"></div>
+        <hr>
+        <label class="form-label">添加公众号（粘贴文章链接）</label>
+        <div class="input-group input-group-sm mb-2">
+          <input type="text" id="mp-article-url" class="form-control" placeholder="粘贴微信公众号文章链接">
+          <button class="btn btn-outline-primary" onclick="addMpByUrl()">添加</button>
+        </div>
+        <div class="form-text">粘贴一篇该公众号的文章链接，系统会自动提取公众号信息并订阅。</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const NAMES = {weibo:'微博', wechat:'微信', maimai:'脉脉', xiaohongshu:'小红书'};
 let pollTimer = null;
 let currentPlatform = '';
 let currentQrid = '';
+let keywordsMap = {};
+
+function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 async function loadPlatforms() {
     const resp = await fetch('/api/dashboard/platforms');
@@ -75,26 +124,133 @@ async function loadPlatforms() {
         const authBg = {active:'success',expired:'danger',inactive:'secondary'}[p.auth_status] || 'secondary';
         const borderCls = {active:'success',expired:'danger'}[p.auth_status] || '';
         const lastVal = p.last_validated ? p.last_validated.substring(0,16) : '从未验证';
+        keywordsMap[p.name] = p.keywords || [];
+        const kwHtml = (p.keywords||[]).map(k =>
+          '<span class="badge bg-light text-dark border">' + escHtml(k) + '</span>'
+        ).join(' ');
+
+        let btns = `
+          <button class="btn btn-primary btn-sm w-100 mb-2" onclick="startQRLogin('${p.name}')">扫码登录</button>
+          <button class="btn btn-outline-secondary btn-sm w-100 mb-2" onclick="openCookieModal('${p.name}')">手动输入Cookie</button>
+          <button class="btn btn-outline-success btn-sm w-100 mb-2" onclick="verifyAuth('${p.name}')">验证状态</button>
+          <button class="btn btn-warning btn-sm w-100 mb-2" onclick="crawlOnce('${p.name}')" id="crawl-btn-${p.name}">立即爬取</button>
+          <button class="btn btn-outline-primary btn-sm w-100 mb-2" onclick="openKwModal('${p.name}')">管理关键词</button>`;
+        if (p.name === 'wechat') {
+            btns += `<button class="btn btn-outline-dark btn-sm w-100" onclick="openMpModal()">管理公众号</button>`;
+        }
+
         return `
     <div class="col-md-6 col-lg-3 mb-3">
       <div class="card h-100 ${borderCls ? 'border-'+borderCls : ''}">
         <div class="card-body text-center">
           <h5 class="mb-2">${NAMES[p.name]||p.name}</h5>
           <span class="badge bg-${authBg} mb-2">${authLabel}</span>
-          <p class="small text-muted mb-3">${lastVal}</p>
-          <button class="btn btn-primary btn-sm w-100 mb-2" onclick="startQRLogin('${p.name}')">
-            扫码登录
-          </button>
-          <button class="btn btn-outline-secondary btn-sm w-100 mb-2" onclick="openCookieModal('${p.name}')">
-            手动输入Cookie
-          </button>
-          <button class="btn btn-outline-success btn-sm w-100" onclick="verifyAuth('${p.name}')">
-            验证状态
-          </button>
+          <p class="small text-muted mb-1">${lastVal}</p>
+          <div class="mb-3 text-start" style="min-height:28px">
+            <a href="javascript:void(0)" class="small text-decoration-none" onclick="openKwModal('${p.name}')">${kwHtml || '<span class="text-muted">无关键词</span>'}</a>
+          </div>
+          ${btns}
         </div>
       </div>
     </div>`;
     }).join('');
+}
+
+// ── 关键词管理 ──
+let editingKw = [];
+
+function openKwModal(platform) {
+    document.getElementById('kw-platform').value = platform;
+    document.getElementById('kw-platform-label').textContent = NAMES[platform] || platform;
+    document.getElementById('kw-input').value = '';
+    editingKw = [...(keywordsMap[platform] || [])];
+    renderKwTags();
+    new bootstrap.Modal(document.getElementById('kwModal')).show();
+}
+
+function renderKwTags() {
+    const el = document.getElementById('kw-tags');
+    if (!editingKw.length) { el.innerHTML = '<span class="text-muted">暂无关键词</span>'; return; }
+    el.innerHTML = editingKw.map((kw, i) =>
+        '<span class="badge bg-primary d-inline-flex align-items-center gap-1">' +
+        escHtml(kw) + ' <span style="cursor:pointer" onclick="removeKeyword(' + i + ')">&times;</span></span>'
+    ).join('');
+}
+
+function addKeyword() {
+    const input = document.getElementById('kw-input');
+    const kw = input.value.trim();
+    if (!kw || editingKw.includes(kw)) { input.value = ''; return; }
+    editingKw.push(kw);
+    input.value = '';
+    renderKwTags();
+}
+
+function removeKeyword(i) { editingKw.splice(i, 1); renderKwTags(); }
+
+async function saveKeywords() {
+    const platform = document.getElementById('kw-platform').value;
+    const resp = await fetch('/api/config/platforms/' + platform, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({keywords: editingKw})
+    });
+    const data = await resp.json();
+    if (data.status === 'ok') {
+        bootstrap.Modal.getInstance(document.getElementById('kwModal')).hide();
+        loadPlatforms();
+    } else { alert('保存失败: ' + (data.error || '')); }
+}
+
+// ── 公众号管理 ──
+let mpList = [];
+
+async function openMpModal() {
+    document.getElementById('mp-article-url').value = '';
+    await loadMpList();
+    new bootstrap.Modal(document.getElementById('mpModal')).show();
+}
+
+async function loadMpList() {
+    const resp = await fetch('/api/auth/wechat/mp');
+    mpList = await resp.json();
+    renderMpList();
+}
+
+function renderMpList() {
+    const el = document.getElementById('mp-list');
+    if (!mpList.length) { el.innerHTML = '<p class="text-muted small">暂无订阅公众号</p>'; return; }
+    el.innerHTML = '<table class="table table-sm mb-0"><tbody>' +
+        mpList.map((mp, i) =>
+            '<tr><td>' + escHtml(mp.name || mp.mpId || '') + '</td>' +
+            '<td class="text-end"><button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="deleteMp(' + i + ')">删除</button></td></tr>'
+        ).join('') + '</tbody></table>';
+}
+
+async function addMpByUrl() {
+    const input = document.getElementById('mp-article-url');
+    const url = input.value.trim();
+    if (!url) return;
+    const resp = await fetch('/api/auth/wechat/mp', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({article_url: url})
+    });
+    const data = await resp.json();
+    if (data.status === 'ok') {
+        input.value = '';
+        await loadMpList();
+    } else {
+        alert('添加失败: ' + (data.error || ''));
+    }
+}
+
+async function deleteMp(index) {
+    const mp = mpList[index];
+    if (!mp) return;
+    const resp = await fetch('/api/auth/wechat/mp/' + encodeURIComponent(mp.mpId), {method: 'DELETE'});
+    const data = await resp.json();
+    if (data.status === 'ok') await loadMpList();
 }
 
 // ── 扫码登录 ──
@@ -102,45 +258,35 @@ async function startQRLogin(platform) {
     currentPlatform = platform;
     currentQrid = '';
     stopPolling();
-
     document.getElementById('qr-platform-label').textContent = NAMES[platform] || platform;
     document.getElementById('qr-image').style.display = 'none';
     document.getElementById('qr-loading').style.display = 'block';
     document.getElementById('qr-error').style.display = 'none';
     document.getElementById('qr-status').innerHTML = '<span class="text-muted">加载中...</span>';
     document.getElementById('qr-manual-hint').style.display = 'none';
-
     new bootstrap.Modal(document.getElementById('qrModal')).show();
 
     try {
         const resp = await fetch('/api/auth/qrcode/' + platform);
         const data = await resp.json();
-
         document.getElementById('qr-loading').style.display = 'none';
-
         if (data.error) {
             document.getElementById('qr-error').textContent = data.error;
             document.getElementById('qr-error').style.display = 'block';
             return;
         }
-
-        // 显示二维码图片
         if (data.qr_image) {
             document.getElementById('qr-image').src = data.qr_image;
             document.getElementById('qr-image').style.display = 'block';
         }
-
         if (data.manual) {
             document.getElementById('qr-status').innerHTML = '<span class="text-muted">该平台暂不支持自动扫码</span>';
             document.getElementById('qr-manual-hint').textContent = data.message || '请手动登录后输入Cookie';
             document.getElementById('qr-manual-hint').style.display = 'block';
             return;
         }
-
         currentQrid = data.qrid || data.uuid || '';
         document.getElementById('qr-status').innerHTML = '<span class="text-primary">请用手机APP扫描二维码</span>';
-
-        // 开始轮询
         startPolling();
     } catch(e) {
         document.getElementById('qr-loading').style.display = 'none';
@@ -149,49 +295,34 @@ async function startQRLogin(platform) {
     }
 }
 
-function startPolling() {
-    pollTimer = setInterval(checkQRStatus, 3000);
-}
-
-function stopPolling() {
-    if (pollTimer) {
-        clearInterval(pollTimer);
-        pollTimer = null;
-    }
-}
+function startPolling() { pollTimer = setInterval(checkQRStatus, 3000); }
+function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 
 async function checkQRStatus() {
     if (!currentPlatform) return;
     try {
         const resp = await fetch('/api/auth/check/' + currentPlatform, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({qrid: currentQrid, uuid: currentQrid})
         });
         const data = await resp.json();
-        const statusEl = document.getElementById('qr-status');
-
+        const s = document.getElementById('qr-status');
         if (data.status === 'success') {
-            statusEl.innerHTML = '<span class="text-success fs-5">登录成功！Cookie已自动获取</span>';
+            s.innerHTML = '<span class="text-success fs-5">登录成功！Cookie已自动获取</span>';
             stopPolling();
-            setTimeout(() => {
-                bootstrap.Modal.getInstance(document.getElementById('qrModal')).hide();
-                loadPlatforms();
-            }, 2000);
+            setTimeout(() => { bootstrap.Modal.getInstance(document.getElementById('qrModal')).hide(); loadPlatforms(); }, 2000);
         } else if (data.status === 'scanned') {
-            statusEl.innerHTML = '<span class="text-warning">已扫码，请在手机上确认...</span>';
+            s.innerHTML = '<span class="text-warning">已扫码，请在手机上确认...</span>';
         } else if (data.status === 'expired') {
-            statusEl.innerHTML = '<span class="text-danger">二维码已过期，请关闭后重新获取</span>';
+            s.innerHTML = '<span class="text-danger">二维码已过期，请关闭后重新获取</span>';
             stopPolling();
         } else if (data.status === 'error') {
-            statusEl.innerHTML = '<span class="text-danger">' + (data.message || '出错') + '</span>';
+            s.innerHTML = '<span class="text-danger">' + (data.message || '出错') + '</span>';
             stopPolling();
         } else {
-            statusEl.innerHTML = '<span class="text-muted">等待扫码... <span class="spinner-border spinner-border-sm"></span></span>';
+            s.innerHTML = '<span class="text-muted">等待扫码... <span class="spinner-border spinner-border-sm"></span></span>';
         }
-    } catch(e) {
-        console.error('轮询失败:', e);
-    }
+    } catch(e) { console.error('轮询失败:', e); }
 }
 
 // ── 手动 Cookie ──
@@ -207,8 +338,7 @@ async function saveCookie() {
     const cookies = document.getElementById('cookie-input').value.trim();
     if (!cookies) { alert('Cookie 不能为空'); return; }
     const resp = await fetch('/api/auth/cookie/' + platform, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({cookies})
     });
     const data = await resp.json();
@@ -222,12 +352,17 @@ async function saveCookie() {
 async function verifyAuth(platform) {
     const resp = await fetch('/api/auth/verify/' + platform, {method: 'POST'});
     const data = await resp.json();
-    if (data.ok) {
-        alert((NAMES[platform]||platform) + ': Cookie有效！');
-    } else {
-        alert((NAMES[platform]||platform) + ': ' + (data.message || 'Cookie无效或未配置'));
-    }
+    alert((NAMES[platform]||platform) + ': ' + (data.ok ? 'Cookie有效！' : (data.message || 'Cookie无效或未配置')));
     loadPlatforms();
+}
+
+async function crawlOnce(platform) {
+    const btn = document.getElementById('crawl-btn-' + platform);
+    if (btn) { btn.disabled = true; btn.textContent = '爬取中...'; }
+    const resp = await fetch('/api/auth/crawl/' + platform, {method: 'POST'});
+    const data = await resp.json();
+    alert(data.ok ? (data.message + '，请稍后在数据页查看结果') : ('爬取失败: ' + (data.message || '未知错误')));
+    if (btn) { btn.disabled = false; btn.textContent = '立即爬取'; }
 }
 
 loadPlatforms();

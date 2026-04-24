@@ -125,7 +125,7 @@ class BaseMonitor(ABC):
             encrypted = encrypt_cookie(cookie_str)
             conn.execute(
                 """INSERT INTO platform_auth (platform, cookies, auth_status, last_validated)
-                   VALUES (?, ?, 'active', datetime('now'))
+                   VALUES (?, ?, 'active', datetime('now','localtime'))
                    ON CONFLICT(platform) DO UPDATE SET
                        cookies = excluded.cookies,
                        auth_status = excluded.auth_status,

@@ -103,6 +103,10 @@ def check_login(platform):
             if not client_obj:
                 return jsonify({"status": "error", "message": "会话已过期，请重新获取二维码"})
             result = client_obj.check_login_status(qrid)
+            if result.get("status") == "success":
+                token = client_obj.load_token() or ""
+                if token:
+                    _save_platform_cookies(platform, f"weread_token={token}")
             return jsonify(result)
 
         return jsonify({"status": "waiting", "message": "该平台需手动输入Cookie"})
@@ -140,6 +144,59 @@ def verify_auth(platform):
         return jsonify({"ok": False, "message": str(e)})
 
 
+@bp.route("/api/auth/crawl/<platform>", methods=["POST"])
+def crawl_once(platform):
+    """手动触发一次爬取"""
+    import threading
+    from core.scheduler import _load_monitor_class, UnifiedScheduler
+    from core.config_loader import get_platform_config
+
+    cfg = _get_cfg()
+    db_path = _get_db()
+
+    # 检查平台是否已认证
+    conn = get_connection(db_path)
+    try:
+        row = conn.execute(
+            "SELECT auth_status FROM platform_auth WHERE platform=?", (platform,)
+        ).fetchone()
+        if not row or row["auth_status"] != "active":
+            return jsonify({"ok": False, "message": "该平台未认证，请先登录"}), 400
+    finally:
+        conn.close()
+
+    MonitorClass = _load_monitor_class(platform)
+    if not MonitorClass:
+        return jsonify({"ok": False, "message": "平台模块未加载"}), 400
+
+    pcfg = get_platform_config(platform, cfg)
+    default_kw = cfg.get("default_keywords", [])
+    keywords = pcfg.get("keywords", default_kw)
+    if not keywords:
+        return jsonify({"ok": False, "message": "未配置关键词"}), 400
+
+    # 后台线程执行爬取
+    def _do_crawl():
+        scheduler = UnifiedScheduler.__new__(UnifiedScheduler)
+        scheduler.config = cfg
+        scheduler.db_path = db_path
+        scheduler.jobs = []
+        scheduler._lock = threading.Lock()
+        scheduler._sentiment_analyzer = None
+        scheduler._feishu_notifier = None
+        scheduler._init_analyzer()
+        scheduler._init_notifier()
+
+        from core.scheduler import ScheduledJob
+        job = ScheduledJob(platform, 999999, keywords, True)
+        scheduler._execute_job(job)
+        log.info("[手动爬取] %s 完成", platform)
+
+    t = threading.Thread(target=_do_crawl, daemon=True)
+    t.start()
+    return jsonify({"ok": True, "message": f"已开始爬取 {PLATFORM_NAMES.get(platform, platform)}"})
+
+
 # ── 辅助函数 ──
 
 import threading
@@ -163,9 +220,9 @@ def _save_platform_cookies(platform: str, cookie_str: str):
         encrypted = encrypt_cookie(cookie_str)
         conn.execute(
             """INSERT INTO platform_auth (platform, cookies, auth_status, last_validated)
-               VALUES (?, ?, 'active', datetime('now'))
+               VALUES (?, ?, 'active', datetime('now','localtime'))
                ON CONFLICT(platform) DO UPDATE SET
-                   cookies=excluded.cookies, auth_status='active', last_validated=datetime('now')""",
+                   cookies=excluded.cookies, auth_status='active', last_validated=datetime('now','localtime')""",
             (platform, encrypted),
         )
         conn.commit()
@@ -182,3 +239,109 @@ def _url_to_qr_base64(url: str) -> str:
     qr.make_image(fill_color="black", back_color="white").save(buf, format="PNG")
     b64 = base64.b64encode(buf.getvalue()).decode("ascii")
     return f"data:image/png;base64,{b64}"
+
+
+# ── 微信公众号订阅管理 ──
+
+def _get_weread_client():
+    from platforms.wechat.weread_client import WeReadClient
+    return WeReadClient(_get_db())
+
+
+@bp.route("/api/auth/wechat/mp", methods=["GET"])
+def list_mp():
+    """获取微信公众号订阅列表"""
+    client = _get_weread_client()
+    subs = client.load_mp_subscriptions()
+    return jsonify(subs)
+
+
+@bp.route("/api/auth/wechat/mp", methods=["POST"])
+def add_mp():
+    """通过文章链接添加微信公众号订阅"""
+    data = request.get_json() or {}
+    article_url = data.get("article_url", "").strip()
+    name = data.get("name", "").strip()
+    mp_id = data.get("mpId", "").strip()
+
+    # 方式1: 通过文章链接提取
+    if article_url:
+        mp_id, name = _extract_mp_from_url(article_url)
+        if not mp_id:
+            return jsonify({"error": "无法从链接中提取公众号信息，请确认链接格式"}), 400
+
+    if not mp_id:
+        return jsonify({"error": "请提供文章链接"}), 400
+
+    client = _get_weread_client()
+    subs = client.load_mp_subscriptions()
+    if any(s.get("mpId") == mp_id for s in subs):
+        return jsonify({"error": "该公众号已订阅"}), 400
+    subs.append({"mpId": mp_id, "name": name or mp_id})
+    client.save_mp_subscriptions(subs)
+    return jsonify({"status": "ok"})
+
+
+def _extract_mp_from_url(url: str) -> tuple[str, str]:
+    """从微信公众号文章链接中提取公众号信息"""
+    import re
+    import requests as req
+
+    biz = ""
+    name = ""
+
+    # 先从 URL 参数提取 __biz
+    m = re.search(r'__biz=([A-Za-z0-9_+=]+)', url)
+    if m:
+        biz = m.group(1)
+
+    # 请求文章页面提取更多信息
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9",
+        }
+        resp = req.get(url, headers=headers, timeout=10, allow_redirects=True)
+        html = resp.text
+        final_url = resp.url
+
+        # 从最终 URL 提取 __biz（短链接跳转后）
+        if not biz:
+            m = re.search(r'__biz=([A-Za-z0-9_+=]+)', final_url)
+            if m:
+                biz = m.group(1)
+
+        # 从 HTML 中提取 __biz
+        if not biz:
+            m = re.search(r'__biz\s*=\s*["\']?\s*([A-Za-z0-9_+=]+)', html)
+            if m:
+                biz = m.group(1)
+
+        # 提取公众号名称 — 多种模式
+        for pattern in [
+            r'var\s+nickname\s*=\s*["\']([^"\']+)["\']',
+            r'<strong\s+class="profile_nickname">([^<]+)</strong>',
+            r'<span\s+class="profile_nickname">([^<]+)</span>',
+            r'"nickname"\s*:\s*"([^"]+)"',
+        ]:
+            m = re.search(pattern, html)
+            if m:
+                name = m.group(1).strip()
+                break
+
+    except Exception as e:
+        log.warning("请求文章页失败: %s", e)
+
+    return biz, name
+
+
+@bp.route("/api/auth/wechat/mp/<mp_id>", methods=["DELETE"])
+def delete_mp(mp_id):
+    """删除微信公众号订阅"""
+    client = _get_weread_client()
+    subs = client.load_mp_subscriptions()
+    subs = [s for s in subs if s.get("mpId") != mp_id]
+    client.save_mp_subscriptions(subs)
+    return jsonify({"status": "ok"})

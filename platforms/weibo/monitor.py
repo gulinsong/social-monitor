@@ -35,7 +35,7 @@ class Monitor(BaseMonitor):
             if uid:
                 conn = self._get_auth_conn()
                 conn.execute(
-                    "UPDATE platform_auth SET auth_status='active', last_validated=datetime('now') WHERE platform=?",
+                    "UPDATE platform_auth SET auth_status='active', last_validated=datetime('now','localtime') WHERE platform=?",
                     (self.PLATFORM_NAME,),
                 )
                 conn.commit()

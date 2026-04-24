@@ -146,7 +146,7 @@ class Monitor(BaseMonitor):
             digest_tag = box.select_one("p.txt-info, div.txt-info")
             digest = digest_tag.get_text(strip=True) if digest_tag else ""
 
-            account_tag = box.select_one("a.account, span.s2 a, div.s-p a")
+            account_tag = box.select_one("span.all-time-y2, a.account, span.s2 a, div.s-p a")
             account = account_tag.get_text(strip=True) if account_tag else ""
 
             pub_time = ""
