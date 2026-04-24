@@ -58,7 +58,11 @@ def create_app(config: dict = None) -> Flask:
             if pwd == cfg_password:
                 session["logged_in"] = True
                 session.permanent = True
-                return redirect(url_for("index")), 303
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({"ok": True})
+                return redirect(url_for("index"))
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({"ok": False, "error": "密码错误"}), 401
             return render_template("login.html", error="密码错误")
         return render_template("login.html")
 

@@ -52,7 +52,7 @@ class WeReadClient:
             "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
         })
         self.db_path = db_path
-        self.account = self._load_account()
+        self.account = self.load_account()
 
     def _data_dir(self) -> Path:
         return Path(self.db_path).parent if self.db_path else Path("db")

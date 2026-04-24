@@ -1,20 +1,56 @@
 {% extends "base.html" %}
 {% block title %}登录管理{% endblock %}
 {% block content %}
-<h4>平台登录管理</h4>
+<h4 class="mb-3">平台登录管理</h4>
 <div id="platform-cards" class="row"></div>
+
+<!-- 扫码登录模态框 -->
+<div class="modal fade" id="qrModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">扫码登录 - <span id="qr-platform-label"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="stopPolling()"></button>
+      </div>
+      <div class="modal-body text-center py-4">
+        <img id="qr-image" src="" alt="二维码" style="max-width:280px;display:none" class="mb-3 border rounded p-2">
+        <div id="qr-loading" class="text-muted mb-3">
+          <div class="spinner-border spinner-border-sm me-1"></div> 加载二维码中...
+        </div>
+        <div id="qr-error" class="alert alert-danger" style="display:none"></div>
+        <div id="qr-status" class="mt-2">
+          <span class="text-muted">请用手机APP扫描上方二维码</span>
+        </div>
+        <div id="qr-manual-hint" class="alert alert-info small mt-3" style="display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="stopPolling()">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- 手动输入 Cookie 模态框 -->
 <div class="modal fade" id="cookieModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
-      <div class="modal-header"><h5 class="modal-title">输入 Cookie</h5></div>
+      <div class="modal-header"><h5 class="modal-title">手动输入 Cookie - <span id="cookie-platform-label"></span></h5></div>
       <div class="modal-body">
         <input type="hidden" id="cookie-platform">
         <div class="mb-3">
           <label class="form-label">Cookie 字符串</label>
           <textarea id="cookie-input" class="form-control" rows="5" placeholder="从浏览器开发者工具复制 Cookie..."></textarea>
         </div>
+        <details class="small text-muted">
+          <summary>如何获取 Cookie？</summary>
+          <ol class="mt-2">
+            <li>浏览器打开对应平台并登录</li>
+            <li>按 F12 打开开发者工具</li>
+            <li>切换到 Network（网络）标签</li>
+            <li>刷新页面，点击任意请求</li>
+            <li>在 Headers 中找到 Cookie，复制完整值</li>
+          </ol>
+        </details>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
@@ -25,31 +61,143 @@
 </div>
 
 <script>
-const PLATFORM_NAMES = {weibo:'微博', wechat:'微信', maimai:'脉脉', xiaohongshu:'小红书'};
+const NAMES = {weibo:'微博', wechat:'微信', maimai:'脉脉', xiaohongshu:'小红书'};
+let pollTimer = null;
+let currentPlatform = '';
+let currentQrid = '';
 
 async function loadPlatforms() {
     const resp = await fetch('/api/dashboard/platforms');
     const platforms = await resp.json();
     const el = document.getElementById('platform-cards');
-    el.innerHTML = platforms.map(p => `
+    el.innerHTML = platforms.map(p => {
+        const authLabel = {active:'已认证',expired:'已过期',inactive:'未登录'}[p.auth_status] || p.auth_status;
+        const authBg = {active:'success',expired:'danger',inactive:'secondary'}[p.auth_status] || 'secondary';
+        const borderCls = {active:'success',expired:'danger'}[p.auth_status] || '';
+        const lastVal = p.last_validated ? p.last_validated.substring(0,16) : '从未验证';
+        return `
     <div class="col-md-6 col-lg-3 mb-3">
-      <div class="card h-100">
-        <div class="card-body">
-          <h6>${PLATFORM_NAMES[p.name] || p.name}</h6>
-          <p class="mb-1">
-            认证状态:
-            <span class="badge bg-${p.auth_status==='active'?'success':'warning'}">${p.auth_status}</span>
-          </p>
-          <p class="small text-muted mb-2">${p.last_validated ? '上次验证: '+p.last_validated : '从未验证'}</p>
-          <button class="btn btn-sm btn-outline-primary me-1" onclick="openCookieModal('${p.name}')">输入Cookie</button>
-          <button class="btn btn-sm btn-outline-success" onclick="verifyAuth('${p.name}')">验证</button>
+      <div class="card h-100 ${borderCls ? 'border-'+borderCls : ''}">
+        <div class="card-body text-center">
+          <h5 class="mb-2">${NAMES[p.name]||p.name}</h5>
+          <span class="badge bg-${authBg} mb-2">${authLabel}</span>
+          <p class="small text-muted mb-3">${lastVal}</p>
+          <button class="btn btn-primary btn-sm w-100 mb-2" onclick="startQRLogin('${p.name}')">
+            扫码登录
+          </button>
+          <button class="btn btn-outline-secondary btn-sm w-100 mb-2" onclick="openCookieModal('${p.name}')">
+            手动输入Cookie
+          </button>
+          <button class="btn btn-outline-success btn-sm w-100" onclick="verifyAuth('${p.name}')">
+            验证状态
+          </button>
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
+    }).join('');
 }
 
+// ── 扫码登录 ──
+async function startQRLogin(platform) {
+    currentPlatform = platform;
+    currentQrid = '';
+    stopPolling();
+
+    document.getElementById('qr-platform-label').textContent = NAMES[platform] || platform;
+    document.getElementById('qr-image').style.display = 'none';
+    document.getElementById('qr-loading').style.display = 'block';
+    document.getElementById('qr-error').style.display = 'none';
+    document.getElementById('qr-status').innerHTML = '<span class="text-muted">加载中...</span>';
+    document.getElementById('qr-manual-hint').style.display = 'none';
+
+    new bootstrap.Modal(document.getElementById('qrModal')).show();
+
+    try {
+        const resp = await fetch('/api/auth/qrcode/' + platform);
+        const data = await resp.json();
+
+        document.getElementById('qr-loading').style.display = 'none';
+
+        if (data.error) {
+            document.getElementById('qr-error').textContent = data.error;
+            document.getElementById('qr-error').style.display = 'block';
+            return;
+        }
+
+        // 显示二维码图片
+        if (data.qr_image) {
+            document.getElementById('qr-image').src = data.qr_image;
+            document.getElementById('qr-image').style.display = 'block';
+        }
+
+        if (data.manual) {
+            document.getElementById('qr-status').innerHTML = '<span class="text-muted">该平台暂不支持自动扫码</span>';
+            document.getElementById('qr-manual-hint').textContent = data.message || '请手动登录后输入Cookie';
+            document.getElementById('qr-manual-hint').style.display = 'block';
+            return;
+        }
+
+        currentQrid = data.qrid || data.uuid || '';
+        document.getElementById('qr-status').innerHTML = '<span class="text-primary">请用手机APP扫描二维码</span>';
+
+        // 开始轮询
+        startPolling();
+    } catch(e) {
+        document.getElementById('qr-loading').style.display = 'none';
+        document.getElementById('qr-error').textContent = '网络错误: ' + e.message;
+        document.getElementById('qr-error').style.display = 'block';
+    }
+}
+
+function startPolling() {
+    pollTimer = setInterval(checkQRStatus, 3000);
+}
+
+function stopPolling() {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+}
+
+async function checkQRStatus() {
+    if (!currentPlatform) return;
+    try {
+        const resp = await fetch('/api/auth/check/' + currentPlatform, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({qrid: currentQrid, uuid: currentQrid})
+        });
+        const data = await resp.json();
+        const statusEl = document.getElementById('qr-status');
+
+        if (data.status === 'success') {
+            statusEl.innerHTML = '<span class="text-success fs-5">登录成功！Cookie已自动获取</span>';
+            stopPolling();
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById('qrModal')).hide();
+                loadPlatforms();
+            }, 2000);
+        } else if (data.status === 'scanned') {
+            statusEl.innerHTML = '<span class="text-warning">已扫码，请在手机上确认...</span>';
+        } else if (data.status === 'expired') {
+            statusEl.innerHTML = '<span class="text-danger">二维码已过期，请关闭后重新获取</span>';
+            stopPolling();
+        } else if (data.status === 'error') {
+            statusEl.innerHTML = '<span class="text-danger">' + (data.message || '出错') + '</span>';
+            stopPolling();
+        } else {
+            statusEl.innerHTML = '<span class="text-muted">等待扫码... <span class="spinner-border spinner-border-sm"></span></span>';
+        }
+    } catch(e) {
+        console.error('轮询失败:', e);
+    }
+}
+
+// ── 手动 Cookie ──
 function openCookieModal(platform) {
     document.getElementById('cookie-platform').value = platform;
+    document.getElementById('cookie-platform-label').textContent = NAMES[platform] || platform;
     document.getElementById('cookie-input').value = '';
     new bootstrap.Modal(document.getElementById('cookieModal')).show();
 }
@@ -57,8 +205,8 @@ function openCookieModal(platform) {
 async function saveCookie() {
     const platform = document.getElementById('cookie-platform').value;
     const cookies = document.getElementById('cookie-input').value.trim();
-    if (!cookies) return alert('Cookie 不能为空');
-    const resp = await fetch(`/api/auth/cookie/${platform}`, {
+    if (!cookies) { alert('Cookie 不能为空'); return; }
+    const resp = await fetch('/api/auth/cookie/' + platform, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({cookies})
@@ -66,15 +214,19 @@ async function saveCookie() {
     const data = await resp.json();
     if (data.status === 'ok') {
         bootstrap.Modal.getInstance(document.getElementById('cookieModal')).hide();
-        loadPlatforms();
         alert('Cookie 已保存');
+        loadPlatforms();
     }
 }
 
 async function verifyAuth(platform) {
-    const resp = await fetch(`/api/auth/status/${platform}`);
+    const resp = await fetch('/api/auth/verify/' + platform, {method: 'POST'});
     const data = await resp.json();
-    alert(`${PLATFORM_NAMES[platform] || platform}: ${data.auth_status}`);
+    if (data.ok) {
+        alert((NAMES[platform]||platform) + ': Cookie有效！');
+    } else {
+        alert((NAMES[platform]||platform) + ': ' + (data.message || 'Cookie无效或未配置'));
+    }
     loadPlatforms();
 }
 
