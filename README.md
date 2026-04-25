@@ -1,141 +1,180 @@
-# 社媒监控系统
+# Social Media Monitor
 
-多平台社交媒体关键词监控系统，支持微博、微信公众号、脉脉、小红书的定时爬取、舆情分析和飞书推送。
+Multi-platform social media keyword monitoring system. Supports scheduled crawling, sentiment analysis, and Feishu push notifications for Weibo, WeChat, Maimai, and Xiaohongshu.
 
-## 功能
+## Features
 
-- **多平台监控** — 微博、微信公众号（搜狗 + 微信读书双源）、脉脉、小红书
-- **统一数据库** — 所有平台数据存储在同一 SQLite 数据库中
-- **舆情分析** — SnowNLP + jieba 实时情感分析，可选 LLM 深度分析
-- **飞书推送** — 新内容自动推送富文本卡片到飞书群
-- **Web 管理界面** — 仪表盘、登录管理、调度配置、数据浏览、舆情分析图表
-- **扫码登录** — Cookie 扫码后自动获取，无需手动粘贴
-- **反封号保护** — 请求随机化、熔断机制、指数退避、每小时请求上限
+- **Multi-platform** — Weibo, WeChat Official Accounts (Sogou + WeRead), Maimai, Xiaohongshu
+- **Unified database** — All platform data stored in a single SQLite database
+- **Sentiment analysis** — SnowNLP + jieba real-time analysis, optional LLM deep analysis
+- **Feishu integration** — Auto-push rich text cards to Feishu groups
+- **Web dashboard** — Dashboard, login management, schedule config, data browser, sentiment charts
+- **QR login** — Auto-capture cookies via Playwright QR code scanning, no manual paste needed
+- **Anti-ban protection** — Request randomization, circuit breaker, exponential backoff, hourly rate limits
+- **Colleague circle** — Maimai colleague circle feed crawling with pagination support
 
-## 快速开始
+## Quick Start
 
-### 安装依赖
+### Install Dependencies
 
 ```bash
 pip install -r requirements.txt
+playwright install chromium
 ```
 
-### 配置
+### Configuration
 
-复制并编辑配置文件：
+Copy and edit the config file:
 
 ```bash
 cp config.example.yaml config.yaml
 ```
 
-主要配置项：
+Key settings:
 
 ```yaml
 app:
-  password: "your-password"     # Web 登录密码
+  password: "your-password"       # Web login password
 
-default_keywords: ["your-keyword"] # 全局默认关键词
+default_keywords: ["your-keyword"] # Global default keywords
 
 feishu:
   enabled: true
   webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/xxx"
 
 platforms:
+  maimai:
+    enabled: true
+    interval_hours: 8
+    source: colleague_circle      # colleague_circle / search / both
+    keywords: []
   weibo:
     enabled: true
     interval_hours: 6
     keywords: ["your-keyword"]
-  # ...
+  wechat:
+    enabled: true
+    interval_hours: 6
+    keywords: ["your-keyword"]
+  xiaohongshu:
+    enabled: true
+    interval_hours: 6
+    keywords: ["your-keyword"]
 ```
 
-### 数据迁移（从旧版本）
+### Data Migration (from older versions)
 
 ```bash
 python3 main.py --migrate
 ```
 
-### 启动
+### Running
 
 ```bash
-# 启动 Web UI + 调度器（推荐）
+# Start Web UI + Scheduler (recommended)
 python3 main.py
 
-# 仅启动 Web UI
+# Web UI only
 python3 main.py --web
 
-# 仅启动调度器
+# Scheduler only
 python3 main.py --scheduler
 
-# 测试模式：运行一次爬取
+# Test mode: run once
 python3 main.py --test
 ```
 
-启动后访问 http://localhost:5000，使用 `config.yaml` 中配置的密码登录。
+After starting, visit http://localhost:5000 and login with the password from `config.yaml`.
 
-## 项目结构
+### Maimai Data Source
+
+Maimai supports two data sources, selectable from the login management page:
+
+| Source | API | Description |
+|--------|-----|-------------|
+| `colleague_circle` | `/groundhog/gossip/v3/feed` | Company colleague circle feed (large volume, paginated) |
+| `search` | `/sdk/search/web_get` | Keyword search (limited to ~2 results per query) |
+| `both` | Both APIs | Crawl from both sources |
+
+For `colleague_circle` mode, keywords are optional — leave empty to crawl the full feed.
+
+## Project Structure
 
 ```
 monitor/
-├── main.py                  # 启动入口
-├── config.yaml              # 集中配置
+├── main.py                  # Entry point
+├── config.yaml              # Centralized config
 ├── requirements.txt
 ├── db/
-│   ├── schema.py            # 数据库建表、连接管理
-│   └── migrate.py           # 数据迁移
+│   ├── schema.py            # DB schema, connection management
+│   └── migrate.py           # Data migration
 ├── core/
-│   ├── base_monitor.py      # 平台监控器抽象基类
-│   ├── scheduler.py         # 统一调度器
-│   ├── config_loader.py     # 配置加载
-│   └── rate_limiter.py      # 限速 + 熔断
+│   ├── base_monitor.py      # Abstract base monitor class
+│   ├── scheduler.py         # Unified scheduler (heap-based)
+│   ├── config_loader.py     # Config loading
+│   └── rate_limiter.py      # Rate limiting + circuit breaker
 ├── platforms/
-│   ├── weibo/               # 微博监控
-│   ├── wechat/              # 微信公众号监控（搜狗 + WeRead）
-│   ├── maimai/              # 脉脉监控（Cookie 到位后启用）
-│   └── xiaohongshu/         # 小红书监控（Cookie 到位后启用）
+│   ├── weibo/
+│   │   ├── monitor.py       # Weibo crawler (Playwright)
+│   │   └── login.py         # Weibo QR login (Playwright)
+│   ├── wechat/
+│   │   ├── monitor.py       # WeChat monitor (Sogou + WeRead)
+│   │   └── weread_client.py # WeRead API client
+│   ├── maimai/
+│   │   ├── monitor.py       # Maimai crawler (Playwright)
+│   │   └── login.py         # Maimai QR login (Playwright)
+│   └── xiaohongshu/
+│       ├── monitor.py       # XHS crawler (Playwright)
+│       └── login.py         # XHS QR login (Playwright)
 ├── analysis/
-│   ├── sentiment.py         # SnowNLP + jieba 实时分析
-│   ├── llm_analyzer.py      # LLM 深度分析（可选）
-│   └── custom_dict.txt      # 领域词典
+│   ├── sentiment.py         # SnowNLP + jieba real-time analysis
+│   ├── llm_analyzer.py      # LLM deep analysis (optional)
+│   └── custom_dict.txt      # Domain-specific dictionary
 ├── notifiers/
-│   └── feishu.py            # 飞书 Webhook 推送
+│   └── feishu.py            # Feishu Webhook push
 ├── web/
-│   ├── app.py               # Flask 应用
-│   ├── api/                 # REST API
-│   └── templates/           # 前端模板（Bootstrap 5）
-└── legacy/                  # 旧版模块（只读参考）
+│   ├── app.py               # Flask application
+│   ├── api/                 # REST API endpoints
+│   └── templates/           # Frontend templates (Bootstrap 5)
+└── legacy/                  # Legacy modules (read-only reference)
 ```
 
-## 数据库表
+## Database Schema
 
-| 表 | 说明 |
-|----|------|
-| `posts` | 所有平台的内容（微博/微信/脉脉/小红书） |
-| `comments` | 评论数据 |
-| `scheduler_runs` | 调度执行记录 |
-| `platform_auth` | 平台登录凭据（加密存储） |
+| Table | Description |
+|-------|-------------|
+| `posts` | Content from all platforms |
+| `comments` | Comment data |
+| `scheduler_runs` | Scheduler execution logs |
+| `platform_auth` | Platform credentials (encrypted storage) |
 
-## 安全措施
+## Security
 
-| 措施 | 说明 |
-|------|------|
-| Cookie 加密存储 | XOR + 机器特征密钥，数据库中不存明文 |
-| 自动熔断 | 403/验证码/登录重定向时立即停止 |
-| 指数退避 | 连续失败等待时间指数增长 |
-| 每小时请求上限 | 滑动窗口控制请求频率 |
-| 请求头随机化 | User-Agent、Accept-Language 每次请求轮换 |
-| Web 登录认证 | 密码保护，Session 安全设置 |
+| Measure | Description |
+|---------|-------------|
+| Cookie encryption | XOR + machine-key based encryption, no plaintext in DB |
+| Auto circuit breaker | Stops immediately on 403/CAPTCHA/login redirect |
+| Exponential backoff | Wait time grows exponentially on consecutive failures |
+| Hourly rate limit | Sliding window request frequency control |
+| Header randomization | User-Agent, Accept-Language rotation per request |
+| Web auth | Password-protected login with secure session cookies |
+| Random scheduler jitter | ±10% interval variation + pre/post task random delays |
+| Input validation | Platform allowlist, cookie length limits, SSRF protection |
+| XSS prevention | All user data HTML-escaped in templates |
 
-## 添加新平台
+## Adding a New Platform
 
-1. 在 `platforms/<name>/` 下创建 `monitor.py`，继承 `BaseMonitor`
-2. 实现 `crawl()`、`verify_auth()`、`get_comments()` 方法
-3. 在 `config.yaml` 的 `platforms` 中添加配置
-4. 设置 `enabled: true`
+1. Create `platforms/<name>/monitor.py` extending `BaseMonitor`
+2. Implement `crawl()`, `verify_auth()`, `get_comments()` methods
+3. Add config entry under `platforms` in `config.yaml`
+4. Register platform in `core/scheduler.py` `_load_monitor_class()` map
+5. Set `enabled: true`
 
-## 依赖
+## Dependencies
 
 - Python 3.10+
 - requests, beautifulsoup4, lxml
 - Flask, PyYAML
 - jieba, snownlp
 - qrcode
+- playwright (for Weibo, Maimai, XHS crawling and QR login)
