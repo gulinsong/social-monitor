@@ -1,38 +1,38 @@
 {% extends "base.html" %}
-{% block title %}数据浏览{% endblock %}
+{% block title %}Data Browser{% endblock %}
 {% block content %}
-<h4>数据浏览</h4>
+<h4>Data Browser</h4>
 
 <div class="row mb-3">
   <div class="col-md-2">
     <select id="filter-platform" class="form-select form-select-sm" onchange="loadPosts(1)">
-      <option value="">全部平台</option>
-      <option value="weibo">微博</option>
-      <option value="wechat">微信</option>
-      <option value="maimai">脉脉</option>
-      <option value="xiaohongshu">小红书</option>
+      <option value="">All Platforms</option>
+      <option value="weibo">Weibo</option>
+      <option value="wechat">WeChat</option>
+      <option value="maimai">Maimai</option>
+      <option value="xiaohongshu">Xiaohongshu</option>
     </select>
   </div>
   <div class="col-md-2">
     <select id="filter-sentiment" class="form-select form-select-sm" onchange="loadPosts(1)">
-      <option value="">全部情感</option>
-      <option value="positive">正面</option>
-      <option value="negative">负面</option>
-      <option value="neutral">中性</option>
+      <option value="">All Sentiments</option>
+      <option value="positive">Positive</option>
+      <option value="negative">Negative</option>
+      <option value="neutral">Neutral</option>
     </select>
   </div>
   <div class="col-md-3">
-    <input type="text" id="filter-keyword" class="form-control form-control-sm" placeholder="搜索关键词..." onkeyup="debounceSearch()">
+    <input type="text" id="filter-keyword" class="form-control form-control-sm" placeholder="Search keywords..." onkeyup="debounceSearch()">
   </div>
   <div class="col-md-2">
-    <a href="/api/data/export?format=csv" class="btn btn-sm btn-outline-success">导出CSV</a>
+    <a href="/api/data/export?format=csv" class="btn btn-sm btn-outline-success">Export CSV</a>
   </div>
 </div>
 
 <div class="table-responsive">
   <table class="table table-sm table-hover">
     <thead class="table-dark">
-      <tr><th>平台</th><th>标题/内容</th><th>作者</th><th>关键词</th><th>情感</th><th>时间</th><th>操作</th></tr>
+      <tr><th>Platform</th><th>Title/Content</th><th>Author</th><th>Keywords</th><th>Sentiment</th><th>Time</th><th>Actions</th></tr>
     </thead>
     <tbody id="posts-tbody"></tbody>
   </table>
@@ -78,7 +78,7 @@ async function loadPosts(page) {
     const tbody = document.getElementById('posts-tbody');
     tbody.innerHTML = data.posts.map(p => {
         const sentCls = p.sentiment === 'positive' ? 'success' : p.sentiment === 'negative' ? 'danger' : 'secondary';
-        const sentText = p.sentiment === 'positive' ? '正面' : p.sentiment === 'negative' ? '负面' : p.sentiment === 'neutral' ? '中性' : '未分析';
+        const sentText = p.sentiment === 'positive' ? 'Positive' : p.sentiment === 'negative' ? 'Negative' : p.sentiment === 'neutral' ? 'Neutral' : 'Not Analyzed';
         const content = escHtml((p.title || p.content || '').substring(0, 60));
         const fullTitle = escHtml((p.title||'')+' '+(p.content||''));
         return `<tr>
@@ -88,11 +88,11 @@ async function loadPosts(page) {
             <td>${escHtml(p.keyword) || '-'}</td>
             <td><span class="badge bg-${sentCls}">${sentText}</span> ${p.sentiment_score ? p.sentiment_score.toFixed(2) : ''}</td>
             <td class="small">${escHtml((p.created_at||'').substring(0,10))}</td>
-            <td><button class="btn btn-sm btn-outline-info" onclick="showDetail('${escHtml(p.id)}','${escHtml(p.platform)}')">详情</button></td>
+            <td><button class="btn btn-sm btn-outline-info" onclick="showDetail('${escHtml(p.id)}','${escHtml(p.platform)}')">Details</button></td>
         </tr>`;
     }).join('');
 
-    // 分页
+    // Pagination
     const pg = document.getElementById('pagination');
     let html = '';
     for (let i = 1; i <= data.total_pages; i++) {
@@ -101,7 +101,7 @@ async function loadPosts(page) {
     pg.innerHTML = html;
     document.getElementById('total-info') && document.getElementById('total-info').remove();
     tbody.parentElement.insertAdjacentHTML('afterend',
-        `<small id="total-info" class="text-muted">共 ${data.total} 条，第 ${data.page}/${data.total_pages} 页</small>`);
+        `<small id="total-info" class="text-muted">Total ${data.total} records, page ${data.page}/${data.total_pages}</small>`);
 }
 
 async function showDetail(postId, platform) {
@@ -113,12 +113,12 @@ async function showDetail(postId, platform) {
     document.getElementById('detail-title').textContent = post.title || post.content.substring(0, 50);
     const url = post.url ? escHtml(post.url) : '';
     let body = `
-        <p><strong>平台:</strong> ${escHtml(post.platform)} | <strong>作者:</strong> ${escHtml(post.user_name)} | <strong>关键词:</strong> ${escHtml(post.keyword)}</p>
-        <p><strong>内容:</strong></p><p>${escHtml(post.content || post.title)}</p>
-        <p><strong>情感:</strong> ${escHtml(post.sentiment || '未分析')} ${post.sentiment_score ? '('+post.sentiment_score.toFixed(3)+')' : ''}</p>
-        ${post.keywords ? '<p><strong>提取关键词:</strong> '+escHtml(post.keywords)+'</p>' : ''}
-        ${url ? '<p><a href="'+url+'" target="_blank" rel="noopener">查看原文</a></p>' : ''}
-        <hr><h6>评论</h6><div id="comments-area">加载中...</div>`;
+        <p><strong>Platform:</strong> ${escHtml(post.platform)} | <strong>Author:</strong> ${escHtml(post.user_name)} | <strong>Keywords:</strong> ${escHtml(post.keyword)}</p>
+        <p><strong>Content:</strong></p><p>${escHtml(post.content || post.title)}</p>
+        <p><strong>Sentiment:</strong> ${escHtml(post.sentiment || 'Not Analyzed')} ${post.sentiment_score ? '('+post.sentiment_score.toFixed(3)+')' : ''}</p>
+        ${post.keywords ? '<p><strong>Extracted Keywords:</strong> '+escHtml(post.keywords)+'</p>' : ''}
+        ${url ? '<p><a href="'+url+'" target="_blank" rel="noopener">View Original</a></p>' : ''}
+        <hr><h6>Comments</h6><div id="comments-area">Loading...</div>`;
     document.getElementById('detail-body').innerHTML = body;
     new bootstrap.Modal(document.getElementById('detailModal')).show();
 
@@ -126,7 +126,7 @@ async function showDetail(postId, platform) {
     const cData = await cResp.json();
     const cArea = document.getElementById('comments-area');
     if (cData.comments.length === 0) {
-        cArea.innerHTML = '<p class="text-muted">暂无评论</p>';
+        cArea.innerHTML = '<p class="text-muted">No comments</p>';
     } else {
         cArea.innerHTML = cData.comments.map(c =>
             `<div class="border-bottom py-1"><strong>${escHtml(c.user_name)}</strong> <small class="text-muted">${escHtml(c.created_at)}</small><br>${escHtml(c.content)}</div>`

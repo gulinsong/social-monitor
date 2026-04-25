@@ -1,111 +1,111 @@
 {% extends "base.html" %}
-{% block title %}登录管理{% endblock %}
+{% block title %}Login Management{% endblock %}
 {% block content %}
-<h4 class="mb-3">平台登录管理</h4>
+<h4 class="mb-3">Platform Login Management</h4>
 <div id="platform-cards" class="row"></div>
 
-<!-- 扫码登录模态框 -->
+<!-- QR Login Modal -->
 <div class="modal fade" id="qrModal" tabindex="-1" data-bs-backdrop="static">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">扫码登录 - <span id="qr-platform-label"></span></h5>
+        <h5 class="modal-title">QR Login - <span id="qr-platform-label"></span></h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="stopPolling()"></button>
       </div>
       <div class="modal-body text-center py-4">
-        <img id="qr-image" src="" alt="二维码" style="max-width:280px;display:none" class="mb-3 border rounded p-2">
+        <img id="qr-image" src="" alt="QR Code" style="max-width:280px;display:none" class="mb-3 border rounded p-2">
         <div id="qr-loading" class="text-muted mb-3">
-          <div class="spinner-border spinner-border-sm me-1"></div> 加载二维码中...
+          <div class="spinner-border spinner-border-sm me-1"></div> Loading QR code...
         </div>
         <div id="qr-error" class="alert alert-danger" style="display:none"></div>
         <div id="qr-status" class="mt-2">
-          <span class="text-muted">请用手机APP扫描上方二维码</span>
+          <span class="text-muted">Scan QR code with mobile app</span>
         </div>
         <div id="qr-manual-hint" class="alert alert-info small mt-3" style="display:none"></div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="stopPolling()">关闭</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="stopPolling()">Close</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- 手动输入 Cookie 模态框 -->
+<!-- Manual Cookie Input Modal -->
 <div class="modal fade" id="cookieModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
-      <div class="modal-header"><h5 class="modal-title">手动输入 Cookie - <span id="cookie-platform-label"></span></h5></div>
+      <div class="modal-header"><h5 class="modal-title">Manual Cookie Input - <span id="cookie-platform-label"></span></h5></div>
       <div class="modal-body">
         <input type="hidden" id="cookie-platform">
         <div class="mb-3">
-          <label class="form-label">Cookie 字符串</label>
-          <textarea id="cookie-input" class="form-control" rows="5" placeholder="从浏览器开发者工具复制 Cookie..."></textarea>
+          <label class="form-label">Cookie String</label>
+          <textarea id="cookie-input" class="form-control" rows="5" placeholder="Copy Cookie from browser developer tools..."></textarea>
         </div>
         <details class="small text-muted">
-          <summary>如何获取 Cookie？</summary>
+          <summary>How to get Cookie?</summary>
           <ol class="mt-2">
-            <li>浏览器打开对应平台并登录</li>
-            <li>按 F12 打开开发者工具</li>
-            <li>切换到 Network（网络）标签</li>
-            <li>刷新页面，点击任意请求</li>
-            <li>在 Headers 中找到 Cookie，复制完整值</li>
+            <li>Open the platform in your browser and login</li>
+            <li>Press F12 to open Developer Tools</li>
+            <li>Switch to the Network tab</li>
+            <li>Refresh the page, click any request</li>
+            <li>Find Cookie in Headers, copy the full value</li>
           </ol>
         </details>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-        <button type="button" class="btn btn-primary" onclick="saveCookie()">保存</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveCookie()">Save</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- 关键词编辑模态框 -->
+<!-- Keyword Edit Modal -->
 <div class="modal fade" id="kwModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
-      <div class="modal-header"><h5 class="modal-title">关键词管理 - <span id="kw-platform-label"></span></h5></div>
+      <div class="modal-header"><h5 class="modal-title">Manage Keywords - <span id="kw-platform-label"></span></h5></div>
       <div class="modal-body">
         <input type="hidden" id="kw-platform">
         <div id="kw-tags" class="d-flex flex-wrap gap-1 mb-3"></div>
         <div class="input-group">
-          <input type="text" id="kw-input" class="form-control" placeholder="输入关键词，回车添加"
+          <input type="text" id="kw-input" class="form-control" placeholder="Enter keyword, press Enter to add"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();addKeyword();}">
-          <button class="btn btn-outline-primary" onclick="addKeyword()">添加</button>
+          <button class="btn btn-outline-primary" onclick="addKeyword()">Add</button>
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-        <button type="button" class="btn btn-primary" onclick="saveKeywords()">保存</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveKeywords()">Save</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- 公众号管理模态框 -->
+<!-- Official Account Management Modal -->
 <div class="modal fade" id="mpModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
-      <div class="modal-header"><h5 class="modal-title">公众号订阅管理</h5></div>
+      <div class="modal-header"><h5 class="modal-title">Official Account Subscriptions</h5></div>
       <div class="modal-body">
         <div id="mp-list" class="mb-3"></div>
         <hr>
-        <label class="form-label">添加公众号（粘贴文章链接）</label>
+        <label class="form-label">Add Official Account (paste article link)</label>
         <div class="input-group input-group-sm mb-2">
-          <input type="text" id="mp-article-url" class="form-control" placeholder="粘贴微信公众号文章链接">
-          <button class="btn btn-outline-primary" onclick="addMpByUrl()">添加</button>
+          <input type="text" id="mp-article-url" class="form-control" placeholder="Paste WeChat official account article link">
+          <button class="btn btn-outline-primary" onclick="addMpByUrl()">Add</button>
         </div>
-        <div class="form-text">粘贴一篇该公众号的文章链接，系统会自动提取公众号信息并订阅。</div>
+        <div class="form-text">Paste an article link from the official account, the system will automatically extract and subscribe.</div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-const NAMES = {weibo:'微博', wechat:'微信', maimai:'脉脉', xiaohongshu:'小红书'};
+const NAMES = {weibo:'Weibo', wechat:'WeChat', maimai:'Maimai', xiaohongshu:'Xiaohongshu'};
 let pollTimer = null;
 let currentPlatform = '';
 let currentQrid = '';
@@ -120,29 +120,29 @@ async function loadPlatforms() {
     const platforms = await resp.json();
     const el = document.getElementById('platform-cards');
     el.innerHTML = platforms.map(p => {
-        const authLabel = {active:'已认证',expired:'已过期',inactive:'未登录'}[p.auth_status] || p.auth_status;
+        const authLabel = {active:'Authenticated',expired:'Expired',inactive:'Not Logged In'}[p.auth_status] || p.auth_status;
         const authBg = {active:'success',expired:'danger',inactive:'secondary'}[p.auth_status] || 'secondary';
         const borderCls = {active:'success',expired:'danger'}[p.auth_status] || '';
-        const lastVal = p.last_validated ? p.last_validated.substring(0,16) : '从未验证';
+        const lastVal = p.last_validated ? p.last_validated.substring(0,16) : 'Never verified';
         keywordsMap[p.name] = p.keywords || [];
         const kwHtml = (p.keywords||[]).map(k =>
           '<span class="badge bg-light text-dark border">' + escHtml(k) + '</span>'
         ).join(' ');
 
         let btns = `
-          <button class="btn btn-primary btn-sm w-100 mb-2" onclick="startQRLogin('${p.name}')">扫码登录</button>
-          <button class="btn btn-outline-secondary btn-sm w-100 mb-2" onclick="openCookieModal('${p.name}')">手动输入Cookie</button>
-          <button class="btn btn-outline-success btn-sm w-100 mb-2" onclick="verifyAuth('${p.name}')">验证状态</button>
-          <button class="btn btn-warning btn-sm w-100 mb-2" onclick="crawlOnce('${p.name}')" id="crawl-btn-${p.name}">立即爬取</button>
-          <button class="btn btn-outline-primary btn-sm w-100 mb-2" onclick="openKwModal('${p.name}')">管理关键词</button>`;
+          <button class="btn btn-primary btn-sm w-100 mb-2" onclick="startQRLogin('${p.name}')">QR Login</button>
+          <button class="btn btn-outline-secondary btn-sm w-100 mb-2" onclick="openCookieModal('${p.name}')">Manual Cookie Input</button>
+          <button class="btn btn-outline-success btn-sm w-100 mb-2" onclick="verifyAuth('${p.name}')">Verify Auth</button>
+          <button class="btn btn-warning btn-sm w-100 mb-2" onclick="crawlOnce('${p.name}')" id="crawl-btn-${p.name}">Crawl Now</button>
+          <button class="btn btn-outline-primary btn-sm w-100 mb-2" onclick="openKwModal('${p.name}')">Manage Keywords</button>`;
         if (p.name === 'wechat') {
-            btns += `<button class="btn btn-outline-dark btn-sm w-100" onclick="openMpModal()">管理公众号</button>`;
+            btns += `<button class="btn btn-outline-dark btn-sm w-100" onclick="openMpModal()">Manage Accounts</button>`;
         }
         if (p.name === 'maimai') {
             const srcOpts = [
-              {v:'colleague_circle',l:'同事圈'},
-              {v:'search',l:'关键词搜索'},
-              {v:'both',l:'两者都要'},
+              {v:'colleague_circle',l:'Colleague Circle'},
+              {v:'search',l:'Keyword Search'},
+              {v:'both',l:'Both'},
             ];
             const curSrc = p.source || 'colleague_circle';
             let srcHtml = '<select class="form-select form-select-sm mb-2" onchange="changeSource(\'' + p.name + '\', this.value)">';
@@ -150,7 +150,7 @@ async function loadPlatforms() {
               srcHtml += '<option value="' + o.v + '"' + (curSrc === o.v ? ' selected' : '') + '>' + o.l + '</option>';
             }
             srcHtml += '</select>';
-            btns = `<div class="mb-2"><label class="form-label small mb-1">数据来源</label>${srcHtml}</div>` + btns;
+            btns = `<div class="mb-2"><label class="form-label small mb-1">Data Source</label>${srcHtml}</div>` + btns;
         }
 
         return `
@@ -161,7 +161,7 @@ async function loadPlatforms() {
           <span class="badge bg-${authBg} mb-2">${authLabel}</span>
           <p class="small text-muted mb-1">${lastVal}</p>
           <div class="mb-3 text-start" style="min-height:28px">
-            <a href="javascript:void(0)" class="small text-decoration-none" onclick="openKwModal('${p.name}')">${kwHtml || '<span class="text-muted">无关键词</span>'}</a>
+            <a href="javascript:void(0)" class="small text-decoration-none" onclick="openKwModal('${p.name}')">${kwHtml || '<span class="text-muted">No keywords</span>'}</a>
           </div>
           ${btns}
         </div>
@@ -170,7 +170,7 @@ async function loadPlatforms() {
     }).join('');
 }
 
-// ── 关键词管理 ──
+// -- Keyword Management --
 let editingKw = [];
 
 function openKwModal(platform) {
@@ -184,7 +184,7 @@ function openKwModal(platform) {
 
 function renderKwTags() {
     const el = document.getElementById('kw-tags');
-    if (!editingKw.length) { el.innerHTML = '<span class="text-muted">暂无关键词</span>'; return; }
+    if (!editingKw.length) { el.innerHTML = '<span class="text-muted">No keywords</span>'; return; }
     el.innerHTML = editingKw.map((kw, i) =>
         '<span class="badge bg-primary d-inline-flex align-items-center gap-1">' +
         escHtml(kw) + ' <span style="cursor:pointer" onclick="removeKeyword(' + i + ')">&times;</span></span>'
@@ -213,10 +213,10 @@ async function saveKeywords() {
     if (data.status === 'ok') {
         bootstrap.Modal.getInstance(document.getElementById('kwModal')).hide();
         loadPlatforms();
-    } else { alert('保存失败: ' + (data.error || '')); }
+    } else { alert('Save failed: ' + (data.error || '')); }
 }
 
-// ── 公众号管理 ──
+// -- Official Account Management --
 let mpList = [];
 
 async function openMpModal() {
@@ -233,11 +233,11 @@ async function loadMpList() {
 
 function renderMpList() {
     const el = document.getElementById('mp-list');
-    if (!mpList.length) { el.innerHTML = '<p class="text-muted small">暂无订阅公众号</p>'; return; }
+    if (!mpList.length) { el.innerHTML = '<p class="text-muted small">No subscriptions yet</p>'; return; }
     el.innerHTML = '<table class="table table-sm mb-0"><tbody>' +
         mpList.map((mp, i) =>
             '<tr><td>' + escHtml(mp.name || mp.mpId || '') + '</td>' +
-            '<td class="text-end"><button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="deleteMp(' + i + ')">删除</button></td></tr>'
+            '<td class="text-end"><button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="deleteMp(' + i + ')">Delete</button></td></tr>'
         ).join('') + '</tbody></table>';
 }
 
@@ -255,7 +255,7 @@ async function addMpByUrl() {
         input.value = '';
         await loadMpList();
     } else {
-        alert('添加失败: ' + (data.error || ''));
+        alert('Add failed: ' + (data.error || ''));
     }
 }
 
@@ -267,7 +267,7 @@ async function deleteMp(index) {
     if (data.status === 'ok') await loadMpList();
 }
 
-// ── 扫码登录 ──
+// ── QR Login ──
 async function startQRLogin(platform) {
     currentPlatform = platform;
     currentQrid = '';
@@ -276,7 +276,7 @@ async function startQRLogin(platform) {
     document.getElementById('qr-image').style.display = 'none';
     document.getElementById('qr-loading').style.display = 'block';
     document.getElementById('qr-error').style.display = 'none';
-    document.getElementById('qr-status').innerHTML = '<span class="text-muted">加载中...</span>';
+    document.getElementById('qr-status').innerHTML = '<span class="text-muted">Loading...</span>';
     document.getElementById('qr-manual-hint').style.display = 'none';
     new bootstrap.Modal(document.getElementById('qrModal')).show();
 
@@ -294,17 +294,17 @@ async function startQRLogin(platform) {
             document.getElementById('qr-image').style.display = 'block';
         }
         if (data.manual) {
-            document.getElementById('qr-status').innerHTML = '<span class="text-muted">该平台暂不支持自动扫码</span>';
-            document.getElementById('qr-manual-hint').textContent = data.message || '请手动登录后输入Cookie';
+            document.getElementById('qr-status').innerHTML = '<span class="text-muted">Auto QR scan not supported for this platform</span>';
+            document.getElementById('qr-manual-hint').textContent = data.message || 'Please login manually and enter Cookie';
             document.getElementById('qr-manual-hint').style.display = 'block';
             return;
         }
         currentQrid = data.qrid || data.uuid || '';
-        document.getElementById('qr-status').innerHTML = '<span class="text-primary">请用手机APP扫描二维码</span>';
+        document.getElementById('qr-status').innerHTML = '<span class="text-primary">Scan QR code with mobile app</span>';
         startPolling();
     } catch(e) {
         document.getElementById('qr-loading').style.display = 'none';
-        document.getElementById('qr-error').textContent = '网络错误: ' + e.message;
+        document.getElementById('qr-error').textContent = 'Network error: ' + e.message;
         document.getElementById('qr-error').style.display = 'block';
     }
 }
@@ -322,24 +322,24 @@ async function checkQRStatus() {
         const data = await resp.json();
         const s = document.getElementById('qr-status');
         if (data.status === 'success') {
-            s.innerHTML = '<span class="text-success fs-5">登录成功！Cookie已自动获取</span>';
+            s.innerHTML = '<span class="text-success fs-5">Login successful! Cookie saved</span>';
             stopPolling();
             setTimeout(() => { bootstrap.Modal.getInstance(document.getElementById('qrModal')).hide(); loadPlatforms(); }, 2000);
         } else if (data.status === 'scanned') {
-            s.innerHTML = '<span class="text-warning">已扫码，请在手机上确认...</span>';
+            s.innerHTML = '<span class="text-warning">Scanned, please confirm on phone...</span>';
         } else if (data.status === 'expired') {
-            s.innerHTML = '<span class="text-danger">二维码已过期，请关闭后重新获取</span>';
+            s.innerHTML = '<span class="text-danger">QR code expired, please close and retry</span>';
             stopPolling();
         } else if (data.status === 'error') {
-            s.innerHTML = '<span class="text-danger">' + (data.message || '出错') + '</span>';
+            s.innerHTML = '<span class="text-danger">' + (data.message || 'Error') + '</span>';
             stopPolling();
         } else {
-            s.innerHTML = '<span class="text-muted">等待扫码... <span class="spinner-border spinner-border-sm"></span></span>';
+            s.innerHTML = '<span class="text-muted">Waiting for scan... <span class="spinner-border spinner-border-sm"></span></span>';
         }
-    } catch(e) { console.error('轮询失败:', e); }
+    } catch(e) { console.error('Polling failed:', e); }
 }
 
-// ── 手动 Cookie ──
+// -- Manual Cookie --
 function openCookieModal(platform) {
     document.getElementById('cookie-platform').value = platform;
     document.getElementById('cookie-platform-label').textContent = NAMES[platform] || platform;
@@ -350,7 +350,7 @@ function openCookieModal(platform) {
 async function saveCookie() {
     const platform = document.getElementById('cookie-platform').value;
     const cookies = document.getElementById('cookie-input').value.trim();
-    if (!cookies) { alert('Cookie 不能为空'); return; }
+    if (!cookies) { alert('Cookie cannot be empty'); return; }
     const resp = await fetch('/api/auth/cookie/' + platform, {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({cookies})
@@ -358,7 +358,7 @@ async function saveCookie() {
     const data = await resp.json();
     if (data.status === 'ok') {
         bootstrap.Modal.getInstance(document.getElementById('cookieModal')).hide();
-        alert('Cookie 已保存');
+        alert('Cookie saved');
         loadPlatforms();
     }
 }
@@ -366,7 +366,7 @@ async function saveCookie() {
 async function verifyAuth(platform) {
     const resp = await fetch('/api/auth/verify/' + platform, {method: 'POST'});
     const data = await resp.json();
-    alert((NAMES[platform]||platform) + ': ' + (data.ok ? 'Cookie有效！' : (data.message || 'Cookie无效或未配置')));
+    alert((NAMES[platform]||platform) + ': ' + (data.ok ? 'Cookie is valid!' : (data.message || 'Cookie invalid or not configured')));
     loadPlatforms();
 }
 
@@ -377,16 +377,16 @@ async function changeSource(platform, source) {
         body: JSON.stringify({source})
     });
     const data = await resp.json();
-    if (data.status !== 'ok') alert('保存失败: ' + (data.error || ''));
+    if (data.status !== 'ok') alert('Save failed: ' + (data.error || ''));
 }
 
 async function crawlOnce(platform) {
     const btn = document.getElementById('crawl-btn-' + platform);
-    if (btn) { btn.disabled = true; btn.textContent = '爬取中...'; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Crawling...'; }
     const resp = await fetch('/api/auth/crawl/' + platform, {method: 'POST'});
     const data = await resp.json();
-    alert(data.ok ? (data.message + '，请稍后在数据页查看结果') : ('爬取失败: ' + (data.message || '未知错误')));
-    if (btn) { btn.disabled = false; btn.textContent = '立即爬取'; }
+    alert(data.ok ? (data.message + ', please check results in Data Browser later') : ('Crawl failed: ' + (data.message || 'Unknown error')));
+    if (btn) { btn.disabled = false; btn.textContent = 'Crawl Now'; }
 }
 
 loadPlatforms();

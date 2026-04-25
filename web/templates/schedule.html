@@ -1,21 +1,21 @@
 {% extends "base.html" %}
-{% block title %}调度配置{% endblock %}
+{% block title %}Schedule Config{% endblock %}
 {% block content %}
-<h4>调度配置</h4>
+<h4>Schedule Config</h4>
 <div id="config-cards"></div>
 
-<h5 class="mt-4">全局关键词</h5>
+<h5 class="mt-4">Global Keywords</h5>
 <div class="row mb-3">
   <div class="col-md-6">
     <div class="input-group">
-      <input type="text" id="global-keywords" class="form-control" placeholder="关键词，逗号分隔">
-      <button class="btn btn-primary" onclick="saveGlobalKeywords()">保存</button>
+      <input type="text" id="global-keywords" class="form-control" placeholder="Keywords, comma separated">
+      <button class="btn btn-primary" onclick="saveGlobalKeywords()">Save</button>
     </div>
   </div>
 </div>
 
 <script>
-const PLATFORM_NAMES = {weibo:'微博', wechat:'微信', maimai:'脉脉', xiaohongshu:'小红书'};
+const PLATFORM_NAMES = {weibo:'Weibo', wechat:'WeChat', maimai:'Maimai', xiaohongshu:'Xiaohongshu'};
 
 async function loadConfig() {
     const resp = await fetch('/api/config/platforms');
@@ -33,24 +33,24 @@ async function loadConfig() {
         </div>
         <div class="card-body">
           <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">爬取间隔(小时)</label>
+            <label class="col-sm-4 col-form-label">Crawl Interval (hours)</label>
             <div class="col-sm-4">
               <input type="number" class="form-control form-control-sm" id="interval-${name}"
                      value="${cfg.interval_hours}" min="1" max="48">
             </div>
             <div class="col-sm-4">
-              <button class="btn btn-sm btn-outline-primary" onclick="saveInterval('${name}')">保存</button>
+              <button class="btn btn-sm btn-outline-primary" onclick="saveInterval('${name}')">Save</button>
             </div>
           </div>
           <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">关键词</label>
+            <label class="col-sm-4 col-form-label">Keywords</label>
             <div class="col-sm-8">
               <input type="text" class="form-control form-control-sm" id="keywords-${name}"
                      value="${cfg.keywords.join(',')}">
             </div>
           </div>
           <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">限速范围(秒)</label>
+            <label class="col-sm-4 col-form-label">Rate Limit Range (seconds)</label>
             <div class="col-sm-4">
               <input type="number" class="form-control form-control-sm" id="delay-min-${name}"
                      value="${cfg.request_delay.min}" step="0.5" min="1">
@@ -62,14 +62,14 @@ async function loadConfig() {
           </div>
           <div class="row">
             <div class="col-sm-12 text-end">
-              <button class="btn btn-sm btn-primary" onclick="savePlatform('${name}')">保存全部</button>
+              <button class="btn btn-sm btn-primary" onclick="savePlatform('${name}')">Save All</button>
             </div>
           </div>
         </div>
       </div>
     </div>`).join('') + '</div>';
 
-    // 加载全局关键词
+    // Load global keywords
     const kwResp = await fetch('/api/config/keywords');
     const kwData = await kwResp.json();
     document.getElementById('global-keywords').value = kwData.keywords.join(',');
@@ -90,7 +90,7 @@ async function saveInterval(name) {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({interval_hours: interval})
     });
-    alert('已保存');
+    alert('Saved');
 }
 
 async function savePlatform(name) {
@@ -102,7 +102,7 @@ async function savePlatform(name) {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({keywords, request_delay: {min, max}})
     });
-    alert('已保存');
+    alert('Saved');
 }
 
 async function saveGlobalKeywords() {
@@ -112,7 +112,7 @@ async function saveGlobalKeywords() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({keywords})
     });
-    alert('已保存');
+    alert('Saved');
 }
 
 loadConfig();

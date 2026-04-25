@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>登录 - 社媒监控</title>
+    <title>Login - Social Media Monitor</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f5f5f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        body { font-family: -apple-system, "Segoe UI", sans-serif; background: #f5f5f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
         .login-card { background: #fff; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); width: 360px; overflow: hidden; }
         .login-header { background: #343a40; color: #fff; padding: 20px; text-align: center; }
         .login-header h5 { margin: 0; }
@@ -24,13 +24,13 @@
 </head>
 <body>
     <div class="login-card">
-        <div class="login-header"><h5>社媒监控系统</h5></div>
+        <div class="login-header"><h5>Social Media Monitor</h5></div>
         <div class="login-body">
             <div id="login-error" class="alert alert-danger"></div>
-            <label for="login-password">密码</label>
+            <label for="login-password">Password</label>
             <input type="password" id="login-password" autofocus
                    onkeydown="if(event.key==='Enter'){event.preventDefault();doLogin();}">
-            <button id="login-btn" class="login-btn" onclick="doLogin()">登录</button>
+            <button id="login-btn" class="login-btn" onclick="doLogin()">Login</button>
         </div>
     </div>
     <script>
@@ -39,12 +39,12 @@
         var btn = document.getElementById('login-btn');
         var errEl = document.getElementById('login-error');
         if (!pwd) {
-            errEl.textContent = '请输入密码';
+            errEl.textContent = 'Please enter password';
             errEl.style.display = 'block';
             return;
         }
         btn.disabled = true;
-        btn.textContent = '登录中...';
+        btn.textContent = 'Logging in...';
         errEl.style.display = 'none';
 
         var xhr = new XMLHttpRequest();
@@ -52,26 +52,26 @@
         xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         xhr.onload = function() {
             if (xhr.status === 200) {
-                // 200 = 返回了登录页 = 密码错误
-                errEl.textContent = '密码错误';
+                // 200 = returned login page = wrong password
+                errEl.textContent = 'Invalid password';
                 errEl.style.display = 'block';
                 btn.disabled = false;
-                btn.textContent = '登录';
+                btn.textContent = 'Login';
             } else if (xhr.status === 303 || xhr.status === 302) {
                 window.location.href = '/';
             }
         };
         xhr.onerror = function() {
-            errEl.textContent = '网络错误';
+            errEl.textContent = 'Network error';
             errEl.style.display = 'block';
             btn.disabled = false;
-            btn.textContent = '登录';
+            btn.textContent = 'Login';
         };
         xhr.onreadystatechange = function() {
-            // XMLHttpRequest 自动跟随重定向，所以成功登录后会拿到 / 的 200
+            // XMLHttpRequest automatically follows redirects, so successful login gets 200 for /
             if (xhr.readyState === 4) {
                 if (xhr.status === 200 && xhr.responseURL && xhr.responseURL.endsWith('/')) {
-                    // 被重定向到了首页 = 登录成功
+                    // Redirected to home = login success
                     window.location.href = '/';
                 }
             }
