@@ -20,6 +20,8 @@ PLATFORM_NAMES = {
     "xiaohongshu": "小红书",
 }
 
+VALID_PLATFORMS = set(PLATFORM_NAMES.keys())
+
 LOGIN_URLS = {
     "weibo": "https://weibo.com/login.php",
     "wechat": "https://weread.qq.com/",
@@ -36,8 +38,14 @@ def _get_cfg():
     return current_app.config["MONITOR_CONFIG"]
 
 
+def _validate_platform(platform: str) -> bool:
+    return platform in VALID_PLATFORMS
+
+
 @bp.route("/api/auth/status/<platform>")
 def auth_status(platform):
+    if not _validate_platform(platform):
+        return jsonify({"error": "无效的平台"}), 400
     conn = get_connection(_get_db())
     try:
         row = conn.execute(
@@ -54,23 +62,21 @@ def auth_status(platform):
 @bp.route("/api/auth/qrcode/<platform>")
 def login_qrcode(platform):
     """获取平台登录二维码（base64图片）"""
+    if not _validate_platform(platform):
+        return jsonify({"error": "无效的平台"}), 400
     try:
-        # WeChat WeRead 支持自动扫码登录
         if platform == "wechat":
             return _wechat_qrcode()
-
-        # Weibo 通过 Playwright 自动获取 Cookie
         if platform == "weibo":
             return _weibo_qrcode()
-
-        # XHS 通过 Playwright 扫码登录
         if platform == "xiaohongshu":
             return _xhs_qrcode()
+        if platform == "maimai":
+            return _maimai_qrcode()
 
-        # 其他平台：生成登录页二维码 + 手动输入Cookie提示
         url = LOGIN_URLS.get(platform)
         if not url:
-            return jsonify({"error": f"不支持的平台: {platform}"}), 400
+            return jsonify({"error": "不支持的平台"}), 400
 
         name = PLATFORM_NAMES.get(platform, platform)
         return jsonify({
@@ -81,8 +87,8 @@ def login_qrcode(platform):
         })
 
     except Exception as e:
-        log.error("获取二维码失败: %s", e)
-        return jsonify({"error": str(e)}), 500
+        log.error("获取二维码失败: %s", e, exc_info=True)
+        return jsonify({"error": "获取二维码失败，请重试"}), 500
 
 
 def _wechat_qrcode():
@@ -118,8 +124,8 @@ def _weibo_qrcode():
             "manual": True,
         })
     except Exception as e:
-        log.error("微博二维码获取失败: %s", e)
-        return jsonify({"error": str(e)}), 500
+        log.error("微博二维码获取失败: %s", e, exc_info=True)
+        return jsonify({"error": "获取二维码失败，请重试"}), 500
 
 
 def _xhs_qrcode():
@@ -141,60 +147,72 @@ def _xhs_qrcode():
             "manual": True,
         })
     except Exception as e:
-        log.error("XHS 二维码获取失败: %s", e)
-        return jsonify({"error": str(e)}), 500
+        log.error("XHS 二维码获取失败: %s", e, exc_info=True)
+        return jsonify({"error": "获取二维码失败，请重试"}), 500
+
+
+def _maimai_qrcode():
+    """MM 扫码登录"""
+    try:
+        from platforms.maimai.login import MaimaiQRLogin
+        login = MaimaiQRLogin()
+        result = login.get_qrcode()
+        if "error" in result:
+            return jsonify(result), 400
+        _store_login_session("maimai", result.get("qrid", ""), login)
+        return jsonify(result)
+    except Exception as e:
+        log.error("MM 二维码获取失败: %s", e, exc_info=True)
+        return jsonify({"error": "获取二维码失败，请重试"}), 500
 
 
 @bp.route("/api/auth/check/<platform>", methods=["POST"])
 def check_login(platform):
     """轮询扫码登录状态"""
+    if not _validate_platform(platform):
+        return jsonify({"status": "error", "message": "无效的平台"}), 400
     data = request.get_json() or {}
     qrid = data.get("qrid", data.get("uuid", ""))
 
     try:
+        login_obj = _get_login_session(platform, qrid)
         if platform == "wechat":
-            client_obj = _get_login_session(platform, qrid)
-            if not client_obj:
+            if not login_obj:
                 return jsonify({"status": "error", "message": "会话已过期，请重新获取二维码"})
-            result = client_obj.check_login_status(qrid)
+            result = login_obj.check_login_status(qrid)
             if result.get("status") == "success":
-                token = client_obj.load_token() or ""
+                token = login_obj.load_token() or ""
                 if token:
                     _save_platform_cookies(platform, f"weread_token={token}")
             return jsonify(result)
 
-        if platform == "weibo":
-            login_obj = _get_login_session(platform, qrid)
+        if platform in ("weibo", "xiaohongshu", "maimai"):
             if not login_obj:
                 return jsonify({"status": "error", "message": "会话已过期，请重新获取二维码"})
             result = login_obj.check_scan(qrid)
             if result.get("status") == "success" and result.get("cookies"):
                 _save_platform_cookies(platform, result["cookies"])
-            return jsonify(result)
-
-        if platform == "xiaohongshu":
-            login_obj = _get_login_session(platform, qrid)
-            if not login_obj:
-                return jsonify({"status": "error", "message": "会话已过期，请重新获取二维码"})
-            result = login_obj.check_scan(qrid)
-            if result.get("status") == "success" and result.get("cookies"):
-                _save_platform_cookies(platform, result["cookies"])
+                _cleanup_login_session(platform, qrid)
             return jsonify(result)
 
         return jsonify({"status": "waiting", "message": "该平台需手动输入Cookie"})
 
     except Exception as e:
-        log.error("检查登录状态失败: %s", e)
-        return jsonify({"status": "error", "message": str(e)})
+        log.error("检查登录状态失败: %s", e, exc_info=True)
+        return jsonify({"status": "error", "message": "检查状态失败，请重试"})
 
 
 @bp.route("/api/auth/cookie/<platform>", methods=["POST"])
 def save_cookie(platform):
     """手动保存 Cookie"""
+    if not _validate_platform(platform):
+        return jsonify({"error": "无效的平台"}), 400
     data = request.get_json()
-    cookie_str = data.get("cookies", "")
+    cookie_str = (data.get("cookies", "") or "").strip()
     if not cookie_str:
         return jsonify({"error": "Cookie 不能为空"}), 400
+    if len(cookie_str) > 10000:
+        return jsonify({"error": "Cookie 过长，请检查输入"}), 400
     _save_platform_cookies(platform, cookie_str)
     return jsonify({"status": "ok"})
 
@@ -202,6 +220,8 @@ def save_cookie(platform):
 @bp.route("/api/auth/verify/<platform>", methods=["POST"])
 def verify_auth(platform):
     """验证平台 Cookie 是否有效"""
+    if not _validate_platform(platform):
+        return jsonify({"ok": False, "message": "无效的平台"}), 400
     try:
         from core.scheduler import _load_monitor_class
         from core.config_loader import get_platform_config
@@ -213,12 +233,15 @@ def verify_auth(platform):
         ok = monitor.verify_auth()
         return jsonify({"ok": ok, "auth_status": "active" if ok else "expired"})
     except Exception as e:
-        return jsonify({"ok": False, "message": str(e)})
+        log.error("验证认证失败: %s", e, exc_info=True)
+        return jsonify({"ok": False, "message": "验证失败"})
 
 
 @bp.route("/api/auth/crawl/<platform>", methods=["POST"])
 def crawl_once(platform):
     """手动触发一次爬取"""
+    if not _validate_platform(platform):
+        return jsonify({"ok": False, "message": "无效的平台"}), 400
     import threading
     from core.scheduler import _load_monitor_class, UnifiedScheduler
     from core.config_loader import get_platform_config
@@ -226,7 +249,6 @@ def crawl_once(platform):
     cfg = _get_cfg()
     db_path = _get_db()
 
-    # 检查平台是否已认证
     conn = get_connection(db_path)
     try:
         row = conn.execute(
@@ -244,10 +266,10 @@ def crawl_once(platform):
     pcfg = get_platform_config(platform, cfg)
     default_kw = cfg.get("default_keywords", [])
     keywords = pcfg.get("keywords", default_kw)
-    if not keywords:
+    needs_keywords = pcfg.get("source", "") not in ("colleague_circle",)
+    if not keywords and needs_keywords:
         return jsonify({"ok": False, "message": "未配置关键词"}), 400
 
-    # 后台线程执行爬取
     def _do_crawl():
         scheduler = UnifiedScheduler.__new__(UnifiedScheduler)
         scheduler.config = cfg
@@ -272,18 +294,56 @@ def crawl_once(platform):
 # ── 辅助函数 ──
 
 import threading
+import time
+
 _login_sessions = {}
 _login_lock = threading.Lock()
+_SESSION_TTL = 600  # 10 分钟过期
 
 
 def _store_login_session(platform: str, key: str, obj):
     with _login_lock:
-        _login_sessions[f"{platform}:{key}"] = obj
+        _cleanup_expired_sessions()
+        _login_sessions[f"{platform}:{key}"] = {
+            "obj": obj,
+            "created_at": time.time(),
+        }
 
 
 def _get_login_session(platform: str, key: str):
     with _login_lock:
-        return _login_sessions.get(f"{platform}:{key}")
+        entry = _login_sessions.get(f"{platform}:{key}")
+        if entry and time.time() - entry["created_at"] > _SESSION_TTL:
+            _cleanup_entry(f"{platform}:{key}", entry)
+            return None
+        return entry["obj"] if entry else None
+
+
+def _cleanup_login_session(platform: str, key: str):
+    with _login_lock:
+        entry = _login_sessions.pop(f"{platform}:{key}", None)
+        if entry and hasattr(entry["obj"], "close"):
+            try:
+                entry["obj"].close()
+            except Exception:
+                pass
+
+
+def _cleanup_entry(k: str, entry: dict):
+    _login_sessions.pop(k, None)
+    if hasattr(entry["obj"], "close"):
+        try:
+            entry["obj"].close()
+        except Exception:
+            pass
+
+
+def _cleanup_expired_sessions():
+    now = time.time()
+    expired = [k for k, v in _login_sessions.items()
+               if now - v["created_at"] > _SESSION_TTL]
+    for k in expired:
+        _cleanup_entry(k, _login_sessions[k])
 
 
 def _save_platform_cookies(platform: str, cookie_str: str):
@@ -315,6 +375,9 @@ def _url_to_qr_base64(url: str) -> str:
 
 # ── 微信公众号订阅管理 ──
 
+_ALLOWED_MP_DOMAINS = ("mp.weixin.qq.com", "weixin.qq.com")
+
+
 def _get_weread_client():
     from platforms.wechat.weread_client import WeReadClient
     return WeReadClient(_get_db())
@@ -336,8 +399,15 @@ def add_mp():
     name = data.get("name", "").strip()
     mp_id = data.get("mpId", "").strip()
 
-    # 方式1: 通过文章链接提取
     if article_url:
+        # SSRF 防护：只允许微信公众号域名
+        from urllib.parse import urlparse
+        parsed = urlparse(article_url)
+        if parsed.scheme not in ("http", "https"):
+            return jsonify({"error": "仅支持 http/https 链接"}), 400
+        host = (parsed.hostname or "").lower()
+        if not any(host == d or host.endswith("." + d) for d in _ALLOWED_MP_DOMAINS):
+            return jsonify({"error": "仅支持微信公众号文章链接"}), 400
         mp_id, name = _extract_mp_from_url(article_url)
         if not mp_id:
             return jsonify({"error": "无法从链接中提取公众号信息，请确认链接格式"}), 400
@@ -362,12 +432,10 @@ def _extract_mp_from_url(url: str) -> tuple[str, str]:
     biz = ""
     name = ""
 
-    # 先从 URL 参数提取 __biz
     m = re.search(r'__biz=([A-Za-z0-9_+=]+)', url)
     if m:
         biz = m.group(1)
 
-    # 请求文章页面提取更多信息
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -379,19 +447,16 @@ def _extract_mp_from_url(url: str) -> tuple[str, str]:
         html = resp.text
         final_url = resp.url
 
-        # 从最终 URL 提取 __biz（短链接跳转后）
         if not biz:
             m = re.search(r'__biz=([A-Za-z0-9_+=]+)', final_url)
             if m:
                 biz = m.group(1)
 
-        # 从 HTML 中提取 __biz
         if not biz:
             m = re.search(r'__biz\s*=\s*["\']?\s*([A-Za-z0-9_+=]+)', html)
             if m:
                 biz = m.group(1)
 
-        # 提取公众号名称 — 多种模式
         for pattern in [
             r'var\s+nickname\s*=\s*["\']([^"\']+)["\']',
             r'<strong\s+class="profile_nickname">([^<]+)</strong>',

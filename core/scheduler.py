@@ -1,5 +1,6 @@
 import heapq
 import logging
+import random
 import threading
 import time
 from datetime import datetime
@@ -121,7 +122,7 @@ class UnifiedScheduler:
             all_comments = []
             total_scanned = 0
 
-            for keyword in job.keywords:
+            for keyword in (job.keywords or [""]):
                 max_pages = monitor.config.get("max_pages_per_keyword",
                                                monitor.config.get("sogou", {}).get("max_pages", 3))
                 result = monitor.crawl(keyword, max_pages=max_pages)
@@ -245,14 +246,25 @@ class UnifiedScheduler:
                 continue
 
             if not job.enabled:
-                job.next_run = time.time() + job.interval_seconds
+                job.next_run = time.time() + job.interval_seconds + random.randint(60, 600)
                 with self._lock:
                     heapq.heappush(self.jobs, job)
                 continue
 
+            # 任务前随机延迟 30~180 秒
+            pre_delay = random.randint(30, 180)
+            log.info("[调度] %s 将在 %d 秒后开始", job.platform_name, pre_delay)
+            time.sleep(pre_delay)
+
             self._execute_job(job)
 
-            job.next_run = time.time() + job.interval_seconds
+            # 任务后随机延迟 30~300 秒
+            post_delay = random.randint(30, 300)
+            time.sleep(post_delay)
+
+            # 下次执行时间加 ±10% 随机抖动
+            jitter = random.uniform(-0.1, 0.1) * job.interval_seconds
+            job.next_run = time.time() + job.interval_seconds + jitter
             with self._lock:
                 heapq.heappush(self.jobs, job)
 

@@ -22,6 +22,9 @@ def create_app(config: dict = None) -> Flask:
     )
     cfg = config or load_config()
     app.secret_key = cfg.get("app", {}).get("secret_key", "change-me")
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["PERMANENT_SESSION_LIFETIME"] = 86400  # 24 hours
     app.config["MONITOR_CONFIG"] = cfg
     app.config["DB_PATH"] = cfg.get("app", {}).get("db_path", "db/monitor.db")
     app.scheduler = None
@@ -66,7 +69,7 @@ def create_app(config: dict = None) -> Flask:
             return render_template("login.html", error="密码错误")
         return render_template("login.html")
 
-    @app.route("/logout")
+    @app.route("/logout", methods=["POST"])
     def logout():
         session.pop("logged_in", None)
         return redirect(url_for("login_page"))

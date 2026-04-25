@@ -138,6 +138,20 @@ async function loadPlatforms() {
         if (p.name === 'wechat') {
             btns += `<button class="btn btn-outline-dark btn-sm w-100" onclick="openMpModal()">管理公众号</button>`;
         }
+        if (p.name === 'maimai') {
+            const srcOpts = [
+              {v:'colleague_circle',l:'同事圈'},
+              {v:'search',l:'关键词搜索'},
+              {v:'both',l:'两者都要'},
+            ];
+            const curSrc = p.source || 'colleague_circle';
+            let srcHtml = '<select class="form-select form-select-sm mb-2" onchange="changeSource(\'' + p.name + '\', this.value)">';
+            for (const o of srcOpts) {
+              srcHtml += '<option value="' + o.v + '"' + (curSrc === o.v ? ' selected' : '') + '>' + o.l + '</option>';
+            }
+            srcHtml += '</select>';
+            btns = `<div class="mb-2"><label class="form-label small mb-1">数据来源</label>${srcHtml}</div>` + btns;
+        }
 
         return `
     <div class="col-md-6 col-lg-3 mb-3">
@@ -354,6 +368,16 @@ async function verifyAuth(platform) {
     const data = await resp.json();
     alert((NAMES[platform]||platform) + ': ' + (data.ok ? 'Cookie有效！' : (data.message || 'Cookie无效或未配置')));
     loadPlatforms();
+}
+
+async function changeSource(platform, source) {
+    const resp = await fetch('/api/config/platforms/' + platform, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({source})
+    });
+    const data = await resp.json();
+    if (data.status !== 'ok') alert('保存失败: ' + (data.error || ''));
 }
 
 async function crawlOnce(platform) {

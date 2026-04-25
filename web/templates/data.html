@@ -52,6 +52,11 @@
 </div>
 
 <script>
+function escHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 let searchTimer;
 function debounceSearch() {
     clearTimeout(searchTimer);
@@ -74,15 +79,16 @@ async function loadPosts(page) {
     tbody.innerHTML = data.posts.map(p => {
         const sentCls = p.sentiment === 'positive' ? 'success' : p.sentiment === 'negative' ? 'danger' : 'secondary';
         const sentText = p.sentiment === 'positive' ? '正面' : p.sentiment === 'negative' ? '负面' : p.sentiment === 'neutral' ? '中性' : '未分析';
-        const content = (p.title || p.content || '').substring(0, 60);
+        const content = escHtml((p.title || p.content || '').substring(0, 60));
+        const fullTitle = escHtml((p.title||'')+' '+(p.content||''));
         return `<tr>
-            <td><span class="badge bg-secondary">${p.platform}</span></td>
-            <td title="${(p.title||'')+' '+(p.content||'')}">${content}${content.length>=60?'...':''}</td>
-            <td>${p.user_name || '-'}</td>
-            <td>${p.keyword || '-'}</td>
+            <td><span class="badge bg-secondary">${escHtml(p.platform)}</span></td>
+            <td title="${fullTitle}">${content}${content.length>=60?'...':''}</td>
+            <td>${escHtml(p.user_name) || '-'}</td>
+            <td>${escHtml(p.keyword) || '-'}</td>
             <td><span class="badge bg-${sentCls}">${sentText}</span> ${p.sentiment_score ? p.sentiment_score.toFixed(2) : ''}</td>
-            <td class="small">${(p.created_at||'').substring(0,10)}</td>
-            <td><button class="btn btn-sm btn-outline-info" onclick="showDetail('${p.id}','${p.platform}')">详情</button></td>
+            <td class="small">${escHtml((p.created_at||'').substring(0,10))}</td>
+            <td><button class="btn btn-sm btn-outline-info" onclick="showDetail('${escHtml(p.id)}','${escHtml(p.platform)}')">详情</button></td>
         </tr>`;
     }).join('');
 
@@ -99,19 +105,19 @@ async function loadPosts(page) {
 }
 
 async function showDetail(postId, platform) {
-    const resp = await fetch(`/api/data/posts?per_page=1`);
     const allResp = await fetch(`/api/data/posts?per_page=200`);
     const allData = await allResp.json();
     const post = allData.posts.find(p => p.id === postId);
     if (!post) return;
 
     document.getElementById('detail-title').textContent = post.title || post.content.substring(0, 50);
+    const url = post.url ? escHtml(post.url) : '';
     let body = `
-        <p><strong>平台:</strong> ${post.platform} | <strong>作者:</strong> ${post.user_name} | <strong>关键词:</strong> ${post.keyword}</p>
-        <p><strong>内容:</strong></p><p>${post.content || post.title}</p>
-        <p><strong>情感:</strong> ${post.sentiment || '未分析'} ${post.sentiment_score ? '('+post.sentiment_score.toFixed(3)+')' : ''}</p>
-        ${post.keywords ? '<p><strong>提取关键词:</strong> '+post.keywords+'</p>' : ''}
-        ${post.url ? '<p><a href="'+post.url+'" target="_blank">查看原文</a></p>' : ''}
+        <p><strong>平台:</strong> ${escHtml(post.platform)} | <strong>作者:</strong> ${escHtml(post.user_name)} | <strong>关键词:</strong> ${escHtml(post.keyword)}</p>
+        <p><strong>内容:</strong></p><p>${escHtml(post.content || post.title)}</p>
+        <p><strong>情感:</strong> ${escHtml(post.sentiment || '未分析')} ${post.sentiment_score ? '('+post.sentiment_score.toFixed(3)+')' : ''}</p>
+        ${post.keywords ? '<p><strong>提取关键词:</strong> '+escHtml(post.keywords)+'</p>' : ''}
+        ${url ? '<p><a href="'+url+'" target="_blank" rel="noopener">查看原文</a></p>' : ''}
         <hr><h6>评论</h6><div id="comments-area">加载中...</div>`;
     document.getElementById('detail-body').innerHTML = body;
     new bootstrap.Modal(document.getElementById('detailModal')).show();
@@ -123,7 +129,7 @@ async function showDetail(postId, platform) {
         cArea.innerHTML = '<p class="text-muted">暂无评论</p>';
     } else {
         cArea.innerHTML = cData.comments.map(c =>
-            `<div class="border-bottom py-1"><strong>${c.user_name}</strong> <small class="text-muted">${c.created_at}</small><br>${c.content}</div>`
+            `<div class="border-bottom py-1"><strong>${escHtml(c.user_name)}</strong> <small class="text-muted">${escHtml(c.created_at)}</small><br>${escHtml(c.content)}</div>`
         ).join('');
     }
 }

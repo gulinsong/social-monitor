@@ -22,6 +22,7 @@ def get_platforms():
             "max_comments_per_post": pcfg.get("max_comments_per_post", 20),
             "request_delay": pcfg.get("request_delay", {"min": 3.0, "max": 8.0}),
             "max_requests_per_hour": pcfg.get("max_requests_per_hour", 60),
+            "source": pcfg.get("source", ""),
         }
     return jsonify(result)
 
@@ -42,6 +43,8 @@ def update_platform(platform):
         pcfg["keywords"] = data["keywords"]
     if "request_delay" in data:
         pcfg["request_delay"] = data["request_delay"]
+    if "source" in data:
+        pcfg["source"] = data["source"]
 
     save_config(cfg)
     current_app.config["MONITOR_CONFIG"] = cfg

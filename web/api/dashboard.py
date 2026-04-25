@@ -58,6 +58,7 @@ def platform_status():
             "keywords": pcfg.get("keywords", cfg.get("default_keywords", [])),
             "auth_status": auth.get("auth_status", "inactive"),
             "last_validated": auth.get("last_validated"),
+            "source": pcfg.get("source", ""),
         })
     return jsonify(result)
 

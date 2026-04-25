@@ -43,6 +43,11 @@
 </div>
 
 <script>
+function escHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 async function loadAnalysis() {
     const resp = await fetch('/api/analysis/summary');
     const data = await resp.json();
@@ -56,7 +61,7 @@ async function loadAnalysis() {
             const pct = total > 0 ? (s.count/total*100).toFixed(1) : 0;
             return Object.assign(document.createElement('div'), {
                 className: 'mb-2',
-                innerHTML: `<span class="badge" style="background:${sentColors[s.label]||'#6c757d'}">${s.label}</span>
+                innerHTML: `<span class="badge" style="background:${sentColors[s.label]||'#6c757d'}">${escHtml(s.label)}</span>
                     <span class="ms-2">${s.count} 条 (${pct}%)</span>
                     <div class="progress mt-1" style="height:6px"><div class="progress-bar" style="width:${pct}%;background:${sentColors[s.label]||'#6c757d'}"></div></div>`
             });
@@ -72,7 +77,7 @@ async function loadAnalysis() {
             const pos = rows.find(r => r.sentiment==='positive')?.count || 0;
             const neg = rows.find(r => r.sentiment==='negative')?.count || 0;
             const neu = rows.find(r => r.sentiment==='neutral')?.count || 0;
-            return `<tr><td>${plat}</td><td class="text-success">${pos}</td><td class="text-danger">${neg}</td><td class="text-secondary">${neu}</td></tr>`;
+            return `<tr><td>${escHtml(plat)}</td><td class="text-success">${pos}</td><td class="text-danger">${neg}</td><td class="text-secondary">${neu}</td></tr>`;
         }).join('') + '</tbody></table>';
 
     // 关键词
@@ -80,13 +85,13 @@ async function loadAnalysis() {
     const maxCount = data.top_keywords.length > 0 ? data.top_keywords[0].count : 1;
     kw.innerHTML = data.top_keywords.map(k => {
         const size = Math.max(12, Math.round(k.count / maxCount * 28));
-        return `<span class="badge bg-light text-dark" style="font-size:${size}px">${k.word} <small>(${k.count})</small></span>`;
+        return `<span class="badge bg-light text-dark" style="font-size:${size}px">${escHtml(k.word)} <small>(${k.count})</small></span>`;
     }).join('');
 
     // 每日趋势
     const dt = document.getElementById('daily-trend');
     dt.innerHTML = data.daily_trend.map(d =>
-        `<tr><td>${d.day}</td><td>${d.total}</td><td class="text-success">${d.positive}</td><td class="text-danger">${d.negative}</td><td class="text-secondary">${d.neutral}</td></tr>`
+        `<tr><td>${escHtml(d.day)}</td><td>${d.total}</td><td class="text-success">${d.positive}</td><td class="text-danger">${d.negative}</td><td class="text-secondary">${d.neutral}</td></tr>`
     ).join('') || '<tr><td colspan="5" class="text-muted">暂无数据</td></tr>';
 }
 

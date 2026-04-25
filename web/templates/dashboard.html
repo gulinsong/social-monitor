@@ -24,6 +24,11 @@
 <div id="sentiment-dist" class="mb-3"></div>
 
 <script>
+function escHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 async function loadDashboard() {
     try {
         const stats = await (await fetch('/api/dashboard/stats')).json();
@@ -35,18 +40,18 @@ async function loadDashboard() {
 
         const tbody = document.getElementById('recent-runs');
         tbody.innerHTML = stats.recent_runs.map(r => `<tr>
-            <td><span class="badge bg-secondary">${r.platform}</span></td>
-            <td>${r.keyword}</td>
-            <td>${r.started_at || ''}</td>
-            <td><span class="badge bg-${r.status==='success'?'success':r.status==='error'?'danger':'warning'}">${r.status}</span></td>
+            <td><span class="badge bg-secondary">${escHtml(r.platform)}</span></td>
+            <td>${escHtml(r.keyword)}</td>
+            <td>${escHtml(r.started_at || '')}</td>
+            <td><span class="badge bg-${r.status==='success'?'success':r.status==='error'?'danger':'warning'}">${escHtml(r.status)}</span></td>
             <td>${r.posts_found}</td>
-            <td class="text-danger small">${r.error_message || ''}</td>
+            <td class="text-danger small">${escHtml(r.error_message || '')}</td>
         </tr>`).join('');
 
         const sd = document.getElementById('sentiment-dist');
         sd.innerHTML = stats.sentiment_distribution.map(s => {
             const cls = s.sentiment === 'positive' ? 'success' : s.sentiment === 'negative' ? 'danger' : 'secondary';
-            return `<span class="badge bg-${cls} me-2">${s.sentiment}: ${s.count}</span>`;
+            return `<span class="badge bg-${cls} me-2">${escHtml(s.sentiment)}: ${s.count}</span>`;
         }).join('');
     } catch(e) { console.error(e); }
 
@@ -65,7 +70,7 @@ async function loadDashboard() {
                 <div class="card border-${borderColor}">
                     <div class="card-body py-2">
                         <strong>${NAMES[p.name]||p.name}</strong>
-                        <span class="badge bg-${p.enabled?'success':'secondary'} float-end">${p.enabled?'启用':'禁用'}</span>
+                        <span class="badge bg-${p.enabled?'success':'secondary'} float-end">${p.enabled?'调度中':'未调度'}</span>
                         <div class="mt-1">
                             <span class="badge bg-${authBg}">认证: ${authLabel}</span>
                         </div>
