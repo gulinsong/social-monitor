@@ -1,8 +1,8 @@
 """
-XHS 关键词监控 — Playwright 浏览器爬取
+XHS keyword monitoring - Playwright browser crawling
 
-策略：Web API 需要 x-s/x-t 签名，
-通过 Playwright 打开搜索页，拦截 edith API 响应来获取数据。
+Strategy: Web API requires x-s/x-t signatures,
+so we use Playwright to open the search page and intercept edith API responses to get data.
 """
 
 import asyncio
@@ -25,14 +25,14 @@ class Monitor(BaseMonitor):
 
     def _configure_session(self):
         super()._configure_session()
-        # Playwright 模式下 session 不直接用于 API 请求
+        # In Playwright mode, session is not used directly for API requests
         self.session.headers.update({
             "Referer": "https://www.xiaohongshu.com/",
             "Origin": "https://www.xiaohongshu.com",
         })
 
     def _get_cookies_for_playwright(self) -> dict:
-        """从 platform_auth 获取 Cookie 并解析为 Playwright 格式"""
+        """Get cookies from platform_auth and parse into Playwright format"""
         conn = self._get_auth_conn()
         try:
             row = conn.execute(
@@ -61,8 +61,8 @@ class Monitor(BaseMonitor):
         cookies = self._get_cookies_for_playwright()
         if not cookies.get("web_session") or not cookies.get("a1"):
             return False
-        # API 需要 x-s 签名，纯 HTTP 无法验证
-        # 有 web_session + a1 即认为有效
+        # API requires x-s signature, pure HTTP cannot verify
+        # Having web_session + a1 is considered valid
         conn = self._get_auth_conn()
         conn.execute(
             "UPDATE platform_auth SET auth_status='active', "
@@ -71,7 +71,7 @@ class Monitor(BaseMonitor):
         )
         conn.commit()
         conn.close()
-        log.info("[XHS] Cookie 有效")
+        log.info("[XHS] Cookies are valid")
         return True
 
     def crawl(self, keyword: str, max_pages: int = 1) -> CrawlResult:
@@ -83,7 +83,7 @@ class Monitor(BaseMonitor):
             result.posts_scanned = len(all_notes)
             result.new_posts = all_notes
         except Exception as e:
-            log.error("[XHS] 爬取失败: %s", e)
+            log.error("[XHS] Crawl failed: %s", e)
         return result
 
     def _run_async(self, coro):
@@ -98,7 +98,7 @@ class Monitor(BaseMonitor):
         from playwright.async_api import async_playwright
         cookies_dict = self._get_cookies_for_playwright()
         if not cookies_dict.get("web_session"):
-            log.warning("[XHS] 未登录，跳过爬取")
+            log.warning("[XHS] Not logged in, skipping crawl")
             return []
 
         pw = await async_playwright().start()
@@ -115,7 +115,7 @@ class Monitor(BaseMonitor):
                 viewport={"width": 1280, "height": 800},
             )
 
-            # 注入 Cookie
+            # Inject cookies
             cookie_list = []
             for name, value in cookies_dict.items():
                 cookie_list.append({
@@ -126,7 +126,7 @@ class Monitor(BaseMonitor):
 
             page = await context.new_page()
 
-            # 拦截搜索 API 响应
+            # Intercept search API responses
             search_results = []
             async def on_response(resp):
                 url = resp.url
@@ -137,7 +137,7 @@ class Monitor(BaseMonitor):
                         items = data.get("data", {}).get("items", [])
                         if items:
                             search_results.extend(items)
-                            log.info("[XHS] 拦截到 %d 条, url=%s", len(items), url[:100])
+                            log.info("[XHS] Intercepted %d items, url=%s", len(items), url[:100])
                     except Exception:
                         pass
 
@@ -150,27 +150,27 @@ class Monitor(BaseMonitor):
                 )
                 await page.goto(search_url, wait_until="domcontentloaded", timeout=15000)
 
-                # 模拟真人：页面加载后先停留浏览
+                # Simulate real user: dwell on page after loading
                 await page.wait_for_timeout(random.randint(3000, 6000))
 
-                # 模拟真人：随机停顿 + 不等距滚动
+                # Simulate real user: random pauses + uneven scrolling
                 for scroll in range(random.randint(3, 6)):
-                    # 随机滚动距离 300~900px
+                    # Random scroll distance 300~900px
                     delta = random.randint(300, 900)
                     await page.evaluate(f"window.scrollBy(0, {delta})")
-                    # 随机停顿 1~4 秒
+                    # Random pause 1~4 seconds
                     await page.wait_for_timeout(random.randint(1000, 4000))
 
-                # 页面间随机休息 5~12 秒
+                # Random rest between pages 5~12 seconds
                 if page_num < max_pages and search_results:
                     pause = random.randint(5000, 12000)
-                    log.info("[XHS] 翻页休息 %.1f 秒", pause / 1000)
+                    log.info("[XHS] Pausing between pages %.1f seconds", pause / 1000)
                     await page.wait_for_timeout(pause)
 
                 if not search_results:
                     break
 
-            # 解析结果
+            # Parse results
             notes = []
             seen_ids = set()
             for item in search_results:
@@ -179,7 +179,7 @@ class Monitor(BaseMonitor):
                     seen_ids.add(note["id"])
                     notes.append(note)
 
-            log.info("[XHS] 关键词'%s'获取 %d 条", keyword, len(notes))
+            log.info("[XHS] Keyword '%s' retrieved %d items", keyword, len(notes))
             return notes
 
         finally:
@@ -192,7 +192,7 @@ class Monitor(BaseMonitor):
         if not note_card:
             return None
 
-        # note_id 在外层 item.id，不在 note_card 里
+        # note_id is in outer item.id, not inside note_card
         note_id = item.get("id", "") or note_card.get("note_id", "")
         if not note_id:
             return None
@@ -207,7 +207,7 @@ class Monitor(BaseMonitor):
         if isinstance(cover_info, dict):
             cover = cover_info.get("url_default", cover_info.get("url", ""))
 
-        # 时间从 corner_tag_info 提取
+        # Extract time from corner_tag_info
         created_at = ""
         for tag in note_card.get("corner_tag_info", []):
             if tag.get("type") == "publish_time":
@@ -247,7 +247,7 @@ class Monitor(BaseMonitor):
 
     @staticmethod
     def _parse_relative_time(text: str) -> str:
-        """解析'5小时前'、'3天前'等相对时间"""
+        """Parse relative time expressions like '5 hours ago', '3 days ago'"""
         if not text:
             return ""
         import re
@@ -289,13 +289,13 @@ class Monitor(BaseMonitor):
         return 0
 
     def get_comments(self, post_id: str, max_count: int = 20) -> list[dict]:
-        # 评论需要 x-s 签名，暂通过 Playwright 获取
+        # Comments require x-s signature, currently fetched via Playwright
         try:
             return self._run_async(
                 self._get_comments_playwright(post_id, max_count)
             )
         except Exception as e:
-            log.error("[XHS] 获取评论失败: %s", e)
+            log.error("[XHS] Failed to get comments: %s", e)
             return []
 
     async def _get_comments_playwright(self, post_id: str, max_count: int) -> list[dict]:
@@ -341,7 +341,7 @@ class Monitor(BaseMonitor):
             )
             await page.wait_for_timeout(3000)
 
-            # 滚动触发评论加载
+            # Scroll to trigger comment loading
             for _ in range(3):
                 await page.evaluate("window.scrollBy(0, 500)")
                 await page.wait_for_timeout(1000)

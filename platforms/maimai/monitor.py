@@ -1,9 +1,9 @@
 """
-脉脉关键词监控 — Playwright 浏览器爬取
+Maimai keyword monitoring - Playwright browser crawling
 
-支持两种数据来源：
-- search: 关键词搜索（/sdk/search/web_get，结果有限）
-- colleague_circle: 同事圈（/groundhog/gossip/v3/feed，数据量大，支持分页）
+Supports two data sources:
+- search: Keyword search (/sdk/search/web_get, limited results)
+- colleague_circle: Colleague circle (/groundhog/gossip/v3/feed, larger data volume, supports pagination)
 """
 
 import asyncio
@@ -65,7 +65,7 @@ class Monitor(BaseMonitor):
         has_session = "session" in cookies and "session.sig" in cookies
         has_u = "u" in cookies
         if not (has_session or has_u):
-            log.warning("[脉脉] 缺少关键 Cookie")
+            log.warning("[Maimai] Missing critical cookies")
             return False
         conn = self._get_auth_conn()
         conn.execute(
@@ -75,7 +75,7 @@ class Monitor(BaseMonitor):
         )
         conn.commit()
         conn.close()
-        log.info("[脉脉] Cookie 有效")
+        log.info("[Maimai] Cookies are valid")
         return True
 
     def crawl(self, keyword: str, max_pages: int = 1) -> CrawlResult:
@@ -96,7 +96,7 @@ class Monitor(BaseMonitor):
                 result.posts_scanned += len(posts)
                 result.new_posts.extend(posts)
         except Exception as e:
-            log.error("[脉脉] 爬取失败: %s", e)
+            log.error("[Maimai] Crawl failed: %s", e)
         return result
 
     def _run_async(self, coro):
@@ -106,20 +106,20 @@ class Monitor(BaseMonitor):
         finally:
             loop.close()
 
-    # ── 同事圈爬取 ──
+    # -- Colleague circle crawling --
 
     async def _crawl_colleague_circle(self, keyword: str, max_pages: int) -> list[dict]:
         from playwright.async_api import async_playwright
 
         cookies_dict = self._get_cookies_dict()
         if not cookies_dict:
-            log.warning("[脉脉] 未登录，跳过爬取")
+            log.warning("[Maimai] Not logged in, skipping crawl")
             return []
 
-        # 先获取 webcid
+        # Get webcid first
         webcid = self._get_webcid(cookies_dict)
         if not webcid:
-            log.warning("[脉脉] 未获取到同事圈 webcid")
+            log.warning("[Maimai] Failed to get colleague circle webcid")
             return []
 
         pw = await async_playwright().start()
@@ -144,7 +144,7 @@ class Monitor(BaseMonitor):
 
             page = await context.new_page()
 
-            # 拦截同事圈 feed API
+            # Intercept colleague circle feed API
             all_items = []
 
             async def on_response(resp):
@@ -160,19 +160,19 @@ class Monitor(BaseMonitor):
                     if items:
                         all_items.extend(items)
                         remain = data.get("remain", 0)
-                        log.info("[脉脉] 同事圈拦截到 %d 条 (剩余%d), url=%s",
+                        log.info("[Maimai] Colleague circle intercepted %d items (%d remaining), url=%s",
                                  len(items), remain, url[:100])
                 except Exception:
                     pass
 
             page.on("response", lambda r: asyncio.ensure_future(on_response(r)))
 
-            # 导航到同事圈页面
+            # Navigate to colleague circle page
             gossip_url = f"https://maimai.cn/company/gossip_discuss?webcid={webcid}"
             await page.goto(gossip_url, wait_until="domcontentloaded", timeout=15000)
             await page.wait_for_timeout(random.randint(3000, 5000))
 
-            # 滚动加载更多页面
+            # Scroll to load more pages
             for page_num in range(max_pages):
                 for scroll in range(random.randint(4, 8)):
                     delta = random.randint(500, 1200)
@@ -181,21 +181,21 @@ class Monitor(BaseMonitor):
 
                 if page_num < max_pages - 1:
                     pause = random.randint(3000, 6000)
-                    log.info("[脉脉] 同事圈翻页休息 %.1f 秒", pause / 1000)
+                    log.info("[Maimai] Colleague circle pausing between pages %.1f seconds", pause / 1000)
                     await page.wait_for_timeout(pause)
 
-            # 按 keyword 过滤并解析
+            # Filter by keyword and parse
             posts = []
             seen_ids = set()
             for item in all_items:
                 post = self._parse_gossip(item)
                 if post and post["id"] not in seen_ids:
                     seen_ids.add(post["id"])
-                    # 同事圈模式下：无关键词不过滤，有关键词则过滤
+                    # In colleague circle mode: no keyword means no filter; with keyword, apply filter
                     if not keyword or keyword.lower() in post["content"].lower() or keyword.lower() in post["title"].lower():
                         posts.append(post)
 
-            log.info("[脉脉] 同事圈获取 %d 条 (关键词过滤后)", len(posts))
+            log.info("[Maimai] Colleague circle retrieved %d items (after keyword filter)", len(posts))
             return posts
 
         finally:
@@ -220,10 +220,10 @@ class Monitor(BaseMonitor):
                 entry = data["data"][0]
                 webcid = entry.get("webcid", "")
                 name = entry.get("name", "")
-                log.info("[脉脉] 同事圈: %s (webcid=%s)", name, webcid)
+                log.info("[Maimai] Colleague circle: %s (webcid=%s)", name, webcid)
                 return webcid
         except Exception as e:
-            log.error("[脉脉] 获取 webcid 失败: %s", e)
+            log.error("[Maimai] Failed to get webcid: %s", e)
         return ""
 
     def _parse_gossip(self, item: dict) -> dict | None:
@@ -271,7 +271,7 @@ class Monitor(BaseMonitor):
             },
         }
 
-    # ── 搜索爬取 ──
+    # -- Search crawling --
 
     async def _crawl_search(self, keyword: str, max_pages: int) -> list[dict]:
         from playwright.async_api import async_playwright
@@ -316,7 +316,7 @@ class Monitor(BaseMonitor):
                     items = _extract_items(data)
                     if items:
                         api_results.extend(items)
-                        log.info("[脉脉] 搜索拦截到 %d 条, url=%s", len(items), url[:120])
+                        log.info("[Maimai] Search intercepted %d items, url=%s", len(items), url[:120])
                 except Exception:
                     pass
 
@@ -352,7 +352,7 @@ class Monitor(BaseMonitor):
                     seen_ids.add(post["id"])
                     posts.append(post)
 
-            log.info("[脉脉] 搜索'%s'获取 %d 条", keyword, len(posts))
+            log.info("[Maimai] Search '%s' retrieved %d items", keyword, len(posts))
             return posts
 
         finally:

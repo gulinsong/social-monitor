@@ -1,5 +1,5 @@
 """
-Flask Web 应用
+Flask Web Application
 """
 
 import functools
@@ -29,7 +29,7 @@ def create_app(config: dict = None) -> Flask:
     app.config["DB_PATH"] = cfg.get("app", {}).get("db_path", "db/monitor.db")
     app.scheduler = None
 
-    # 注册蓝图
+    # Register blueprints
     from web.api.dashboard import bp as dashboard_bp
     from web.api.auth import bp as auth_bp
     from web.api.data import bp as data_bp
@@ -42,7 +42,7 @@ def create_app(config: dict = None) -> Flask:
     app.register_blueprint(analysis_bp)
     app.register_blueprint(config_bp)
 
-    # 登录验证
+    # Login verification
     @app.before_request
     def check_login():
         if request.endpoint in ("login_page", "login_submit", "static"):
@@ -50,7 +50,7 @@ def create_app(config: dict = None) -> Flask:
         if not session.get("logged_in"):
             password = cfg.get("app", {}).get("password", "")
             if not password:
-                return None  # 未设密码则不需要登录
+                return None  # No password set, login not required
             return redirect(url_for("login_page"))
 
     @app.route("/login", methods=["GET", "POST"])

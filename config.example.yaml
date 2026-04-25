@@ -1,5 +1,5 @@
 app:
-  name: "社媒监控系统"
+  name: "Social Media Monitoring System"
   host: "0.0.0.0"
   port: 5000
   secret_key: "change-me-in-production"

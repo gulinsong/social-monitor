@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-微博关键词监控 - 安全爬取框架
-使用移动端接口 + Cookie登录态，低频率采集
+Weibo Keyword Monitor - Safe Crawling Framework
+Uses mobile API + Cookie authentication, low-frequency collection
 """
 
 import argparse
@@ -25,11 +25,11 @@ def load_config():
 
 
 class WeiboMonitor:
-    # 移动端搜索接口，反爬较弱
+    # Mobile search API, weaker anti-crawl
     SEARCH_URL = "https://m.weibo.cn/api/container/getIndex"
-    # 移动端微博详情接口
+    # Mobile post detail API
     DETAIL_URL = "https://m.weibo.cn/detail/{id}"
-    # 移动端评论接口
+    # Mobile comments API
     COMMENTS_URL = "https://m.weibo.cn/api/comments/show"
 
     def __init__(self, config):
@@ -48,7 +48,7 @@ class WeiboMonitor:
         })
         self.session.cookies.set("Cookie", config["cookies"])
 
-        # 解析cookie字符串为独立cookie
+        # Parse cookie string into individual cookies
         for item in config["cookies"].split(";"):
             item = item.strip()
             if "=" in item:
@@ -87,7 +87,7 @@ class WeiboMonitor:
             """)
 
     def _delay(self):
-        """随机延时，模拟人类操作"""
+        """Random delay to simulate human behavior"""
         delay = random.uniform(
             self.config["request_delay_min"],
             self.config["request_delay_max"],
@@ -95,30 +95,30 @@ class WeiboMonitor:
         time.sleep(delay)
 
     def _safe_get(self, url, params=None, retries=2):
-        """安全请求，失败自动停止避免封号"""
+        """Safe request, auto-stop on failure to avoid account ban"""
         for attempt in range(retries):
             try:
                 self._delay()
                 resp = self.session.get(url, params=params, timeout=15)
                 resp.raise_for_status()
 
-                # 检测是否被限流或需要登录
-                if "登录" in resp.text and "密码" in resp.text:
-                    print("[!] Cookie已失效，请更新config.json中的cookies")
+                # Detect rate limiting or login requirement
+                if "登录" in resp.text and "密码" in resp.text:  # Detect Chinese login page
+                    print("[!] Cookie expired, please update cookies in config.json")
                     return None
                 if resp.status_code == 403:
-                    print("[!] 被限流(403)，停止请求")
+                    print("[!] Rate limited (403), stopping requests")
                     return None
 
                 return resp.json() if "json" in resp.headers.get("Content-Type", "") else resp
             except requests.exceptions.RequestException as e:
-                print(f"[!] 请求失败 (尝试 {attempt+1}/{retries}): {e}")
+                print(f"[!] Request failed (attempt {attempt+1}/{retries}): {e}")
                 if attempt < retries - 1:
-                    time.sleep(10 * (attempt + 1))  # 递增等待
+                    time.sleep(10 * (attempt + 1))  # Incremental wait
         return None
 
     def search_keyword(self, keyword, page=1):
-        """搜索关键词获取微博列表"""
+        """Search keyword to get Weibo post list"""
         containerid = f"100103type=1&q={quote(keyword)}"
         params = {
             "containerid": containerid,
@@ -132,7 +132,7 @@ class WeiboMonitor:
         cards = data.get("data", {}).get("cards", [])
         posts = []
         for card in cards:
-            # 搜索结果可能嵌套在 card_group 中
+            # Search results may be nested in card_group
             card_group = card.get("card_group", [])
             if not card_group:
                 card_group = [card]
@@ -144,8 +144,8 @@ class WeiboMonitor:
         return posts
 
     def _parse_post(self, mblog, keyword=""):
-        """解析单条微博"""
-        # 清理HTML标签
+        """Parse a single Weibo post"""
+        # Clean HTML tags
         text = mblog.get("text", "")
         text = re.sub(r"<[^>]+>", "", text)
 
@@ -164,7 +164,7 @@ class WeiboMonitor:
         return post
 
     def get_comments(self, post_id, max_count=20):
-        """获取单条微博的评论"""
+        """Get comments for a single Weibo post"""
         comments = []
         page = 1
         while len(comments) < max_count:
@@ -174,7 +174,7 @@ class WeiboMonitor:
                 break
 
             hotflow = data.get("data", {})
-            # 评论可能在 data 或 hotflow 字段下
+            # Comments may be under data or hotflow field
             raw_comments = hotflow.get("data", hotflow.get("comments", []))
             if not raw_comments:
                 break
@@ -192,13 +192,13 @@ class WeiboMonitor:
                 })
 
             page += 1
-            if page > 5:  # 安全上限
+            if page > 5:  # Safety limit
                 break
 
         return comments[:max_count]
 
     def save_posts(self, posts):
-        """存储微博到数据库"""
+        """Save Weibo posts to database"""
         with sqlite3.connect(self.db_path) as conn:
             for p in posts:
                 conn.execute("""
@@ -213,7 +213,7 @@ class WeiboMonitor:
                 ))
 
     def save_comments(self, comments):
-        """存储评论到数据库"""
+        """Save comments to database"""
         with sqlite3.connect(self.db_path) as conn:
             for c in comments:
                 conn.execute("""
@@ -226,25 +226,25 @@ class WeiboMonitor:
                 ))
 
     def run_once(self):
-        """执行一次完整的爬取"""
+        """Execute a full crawl once"""
         print(f"\n{'='*50}")
-        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 开始爬取")
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Starting crawl")
         print(f"{'='*50}")
 
         for keyword in self.config["keywords"]:
-            print(f"\n[#] 关键词: {keyword}")
+            print(f"\n[#] Keyword: {keyword}")
             all_posts = []
 
             for page in range(1, self.config["max_pages_per_keyword"] + 1):
-                print(f"  [>] 第 {page} 页...")
+                print(f"  [>] Page {page}...")
                 posts = self.search_keyword(keyword, page=page)
                 if not posts:
-                    print(f"  [-] 无更多结果")
+                    print(f"  [-] No more results")
                     break
                 all_posts.extend(posts)
-                print(f"  [+] 获取 {len(posts)} 条微博")
+                print(f"  [+] Got {len(posts)} posts")
 
-            # 去重
+            # Deduplicate
             seen = set()
             unique_posts = []
             for p in all_posts:
@@ -253,22 +253,22 @@ class WeiboMonitor:
                     unique_posts.append(p)
 
             self.save_posts(unique_posts)
-            print(f"  [✓] 存储 {len(unique_posts)} 条微博")
+            print(f"  [OK] Saved {len(unique_posts)} posts")
 
-            # 爬取评论
+            # Crawl comments
             for post in unique_posts:
                 if post["comments_count"] > 0:
                     max_c = self.config.get("max_comments_per_post", 20)
-                    print(f"  [>] 评论: {post['user_name']} - {post['text'][:30]}...")
+                    print(f"  [>] Comments: {post['user_name']} - {post['text'][:30]}...")
                     comments = self.get_comments(post["id"], max_count=max_c)
                     if comments:
                         self.save_comments(comments)
-                        print(f"    [+] {len(comments)} 条评论")
+                        print(f"    [+] {len(comments)} comments")
 
-        print(f"\n[*] 本次爬取完成\n")
+        print(f"\n[*] Crawl completed\n")
 
     def export_json(self, keyword=None):
-        """导出数据为JSON"""
+        """Export data as JSON"""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             if keyword:
@@ -293,17 +293,17 @@ class WeiboMonitor:
         out_path = Path(self.config["output_dir"]) / f"export_{datetime.now().strftime('%Y%m%d_%H%M')}.json"
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(posts, f, ensure_ascii=False, indent=2)
-        print(f"[✓] 导出 {len(posts)} 条到 {out_path}")
+        print(f"[OK] Exported {len(posts)} posts to {out_path}")
         return out_path
 
     def export_csv(self, keyword=None):
-        """导出数据为CSV（posts.csv + comments.csv）"""
+        """Export data as CSV (posts.csv + comments.csv)"""
         output_dir = Path(self.config["output_dir"])
 
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
 
-            # 导出帖子
+            # Export posts
             if keyword:
                 rows = conn.execute(
                     "SELECT * FROM posts WHERE keyword = ? ORDER BY fetched_at DESC",
@@ -326,7 +326,7 @@ class WeiboMonitor:
                                      row["reposts_count"], row["comments_count"],
                                      row["attitudes_count"], row["fetched_at"]])
 
-            # 导出评论
+            # Export comments
             post_ids = [row["id"] for row in rows]
             comments_path = output_dir / f"comments_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
             comment_count = 0
@@ -343,28 +343,28 @@ class WeiboMonitor:
                                          c["text"], c["created_at"], c["fetched_at"]])
                         comment_count += 1
 
-        print(f"[✓] 导出 {len(rows)} 条帖子到 {posts_path}")
-        print(f"[✓] 导出 {comment_count} 条评论到 {comments_path}")
+        print(f"[OK] Exported {len(rows)} posts to {posts_path}")
+        print(f"[OK] Exported {comment_count} comments to {comments_path}")
         return posts_path, comments_path
 
 
 def main():
-    parser = argparse.ArgumentParser(description="微博关键词监控工具")
-    parser.add_argument("--export-csv", action="store_true", help="导出数据为CSV")
-    parser.add_argument("--keyword", default=None, help="按关键词过滤（配合--export-csv使用）")
+    parser = argparse.ArgumentParser(description="Weibo Keyword Monitor Tool")
+    parser.add_argument("--export-csv", action="store_true", help="Export data as CSV")
+    parser.add_argument("--keyword", default=None, help="Filter by keyword (use with --export-csv)")
     args = parser.parse_args()
 
     config = load_config()
 
-    if not config["cookies"] or "在这里" in config["cookies"]:
+    if not config["cookies"] or "在这里" in config["cookies"]:  # Check for Chinese placeholder
         print("=" * 50)
-        print("首次使用，请配置Cookie:")
+        print("First-time setup, please configure Cookie:")
         print()
-        print("1. 浏览器打开 https://m.weibo.cn 并登录")
-        print("2. F12打开开发者工具 -> Network(网络)")
-        print("3. 刷新页面，点击任意请求")
-        print("4. 在Headers中找到Cookie，复制完整值")
-        print("5. 粘贴到 config.json 的 cookies 字段")
+        print("1. Open https://m.weibo.cn in your browser and log in")
+        print("2. Press F12 to open Developer Tools -> Network tab")
+        print("3. Refresh the page, click any request")
+        print("4. Find Cookie in the Headers, copy the full value")
+        print("5. Paste into the cookies field in config.json")
         print("=" * 50)
         return
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-微信公众号监控 - 双源入口（搜狗 + 微信读书）
+WeChat Official Account Monitor - Dual-source entry point (Sogou + WeRead)
 """
 
 from wechat_monitor import run

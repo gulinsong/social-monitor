@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-社媒监控系统 — 启动入口
+Social Media Monitoring System - Entry Point
 """
 
 import argparse
@@ -77,21 +77,21 @@ def run_all(config: dict):
 
 
 def run_test(config: dict):
-    """快速测试：运行一次所有启用的平台爬取"""
+    """Quick test: run all enabled platform crawls once"""
     from core.scheduler import UnifiedScheduler
     scheduler = UnifiedScheduler(config)
     for job in scheduler.jobs:
         scheduler._execute_job(job)
-    print("[测试完成]")
+    print("[Test completed]")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="社媒监控系统")
-    parser.add_argument("--config", default=None, help="配置文件路径")
-    parser.add_argument("--web", action="store_true", help="仅启动 Web UI")
-    parser.add_argument("--scheduler", action="store_true", help="仅启动调度器")
-    parser.add_argument("--test", action="store_true", help="测试模式：运行一次爬取")
-    parser.add_argument("--migrate", action="store_true", help="执行数据迁移")
+    parser = argparse.ArgumentParser(description="Social Media Monitoring System")
+    parser.add_argument("--config", default=None, help="Config file path")
+    parser.add_argument("--web", action="store_true", help="Start web UI only")
+    parser.add_argument("--scheduler", action="store_true", help="Start scheduler only")
+    parser.add_argument("--test", action="store_true", help="Test mode: run once")
+    parser.add_argument("--migrate", action="store_true", help="Run database migration")
     args = parser.parse_args()
 
     config = load_config(args.config)

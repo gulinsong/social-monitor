@@ -16,10 +16,10 @@ PLATFORM_COLORS = {
 }
 
 PLATFORM_LABELS = {
-    "weibo": "微博",
-    "wechat": "微信",
-    "maimai": "脉脉",
-    "xiaohongshu": "小红书",
+    "weibo": "Weibo",
+    "wechat": "WeChat",
+    "maimai": "Maimai",
+    "xiaohongshu": "Xiaohongshu",
 }
 
 
@@ -45,16 +45,16 @@ class FeishuNotifier:
                 timeout=10,
             )
             if resp.status_code == 429:
-                log.warning("飞书推送被限流")
+                log.warning("Feishu push rate limited")
                 return False
             resp.raise_for_status()
             result = resp.json()
             if result.get("code") != 0:
-                log.warning("飞书推送失败: %s", result.get("msg"))
+                log.warning("Feishu push failed: %s", result.get("msg"))
                 return False
             return True
         except Exception as e:
-            log.error("飞书推送异常: %s", e)
+            log.error("Feishu push error: %s", e)
             return False
 
     def push_post(self, post: dict) -> bool:
@@ -64,8 +64,8 @@ class FeishuNotifier:
         sentiment = post.get("sentiment", "")
         score = post.get("sentiment_score", "")
 
-        sentiment_map = {"positive": "正面", "negative": "负面", "neutral": "中性"}
-        sentiment_text = sentiment_map.get(sentiment, "未分析")
+        sentiment_map = {"positive": "Positive", "negative": "Negative", "neutral": "Neutral"}
+        sentiment_text = sentiment_map.get(sentiment, "Not analyzed")
 
         title = post.get("title") or post.get("content", "")[:50]
         content = post.get("content", "")[:500]
@@ -76,7 +76,7 @@ class FeishuNotifier:
                 "tag": "div",
                 "text": {
                     "tag": "lark_md",
-                    "content": f"**作者**: {post.get('user_name', '未知')}\n**内容**: {content}",
+                    "content": f"**Author**: {post.get('user_name', 'Unknown')}\n**Content**: {content}",
                 },
             },
             {"tag": "hr"},
@@ -85,11 +85,11 @@ class FeishuNotifier:
                 "elements": [
                     {
                         "tag": "plain_text",
-                        "content": f"关键词: {post.get('keyword', '')} | 情感: {sentiment_text} ({score})",
+                        "content": f"Keyword: {post.get('keyword', '')} | Sentiment: {sentiment_text} ({score})",
                     },
                     {
                         "tag": "plain_text",
-                        "content": f"互动: {post.get('likes_count', 0)}赞 {post.get('comments_count', 0)}评 {post.get('reposts_count', 0)}转",
+                        "content": f"Engagement: {post.get('likes_count', 0)} likes, {post.get('comments_count', 0)} comments, {post.get('reposts_count', 0)} reposts",
                     },
                 ],
             },
@@ -102,7 +102,7 @@ class FeishuNotifier:
                 "actions": [
                     {
                         "tag": "button",
-                        "text": {"tag": "plain_text", "content": "查看原文"},
+                        "text": {"tag": "plain_text", "content": "View original"},
                         "url": url,
                         "type": "primary",
                     }
@@ -127,22 +127,22 @@ class FeishuNotifier:
 
         success = self._send(payload)
         if success:
-            time.sleep(3)  # 遵守推送频率限制
+            time.sleep(3)  # Respect push rate limit
         return success
 
     def push_summary(self, platform: str, new_count: int, sentiment_summary: dict = None) -> bool:
         label = PLATFORM_LABELS.get(platform, platform)
         color = PLATFORM_COLORS.get(platform, "blue")
 
-        summary_text = f"本次 {label} 爬取完成，发现 {new_count} 条新内容。"
+        summary_text = f"{label} crawl completed, found {new_count} new items."
         if sentiment_summary:
-            summary_text += f"\n正面: {sentiment_summary.get('positive', 0)} | 负面: {sentiment_summary.get('negative', 0)} | 中性: {sentiment_summary.get('neutral', 0)}"
+            summary_text += f"\nPositive: {sentiment_summary.get('positive', 0)} | Negative: {sentiment_summary.get('negative', 0)} | Neutral: {sentiment_summary.get('neutral', 0)}"
 
         payload = {
             "msg_type": "interactive",
             "card": {
                 "header": {
-                    "title": {"tag": "plain_text", "content": f"[{label}] 爬取摘要"},
+                    "title": {"tag": "plain_text", "content": f"[{label}] Crawl Summary"},
                     "template": color,
                 },
                 "elements": [

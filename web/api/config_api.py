@@ -1,4 +1,4 @@
-"""调度配置 API"""
+"""Schedule Configuration API"""
 import logging
 from flask import Blueprint, jsonify, request, current_app
 from core.config_loader import load_config, save_config, get_platform_config
@@ -49,7 +49,7 @@ def update_platform(platform):
     save_config(cfg)
     current_app.config["MONITOR_CONFIG"] = cfg
 
-    # 热更新调度器
+    # Hot-reload scheduler
     if hasattr(current_app, "scheduler") and current_app.scheduler:
         current_app.scheduler.reload_config()
 

@@ -17,7 +17,7 @@ def _ensure_custom_dict(path: str = None):
         try:
             jieba.load_userdict(path)
         except Exception as e:
-            log.warning("加载自定义词典失败: %s", e)
+            log.warning("Failed to load custom dictionary: %s", e)
     jieba.add_word("比亚迪")
     _custom_dict_loaded = True
 
@@ -29,7 +29,7 @@ class SentimentAnalyzer:
             from snownlp import SnowNLP
             self._SnowNLP = SnowNLP
         except ImportError:
-            log.warning("SnowNLP 未安装，情感分析不可用")
+            log.warning("SnowNLP not installed, sentiment analysis unavailable")
             self._SnowNLP = None
 
     def analyze(self, text: str) -> dict:

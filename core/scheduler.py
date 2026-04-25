@@ -33,7 +33,7 @@ def _load_monitor_class(platform_name: str):
     }
     module_path = module_map.get(platform_name)
     if not module_path:
-        log.error("未知平台: %s", platform_name)
+        log.error("Unknown platform: %s", platform_name)
         return None
 
     import importlib
@@ -41,7 +41,7 @@ def _load_monitor_class(platform_name: str):
         module = importlib.import_module(module_path)
         return module.Monitor
     except (ImportError, AttributeError) as e:
-        log.error("加载平台模块 %s 失败: %s", platform_name, e)
+        log.error("Failed to load platform module %s: %s", platform_name, e)
         return None
 
 
@@ -69,7 +69,7 @@ class UnifiedScheduler:
             self.jobs.append(job)
 
         heapq.heapify(self.jobs)
-        log.info("调度器初始化: %d 个任务", len(self.jobs))
+        log.info("Scheduler initialized: %d jobs", len(self.jobs))
 
     def _init_analyzer(self):
         if self._sentiment_analyzer:
@@ -79,9 +79,9 @@ class UnifiedScheduler:
             try:
                 from analysis.sentiment import SentimentAnalyzer
                 self._sentiment_analyzer = SentimentAnalyzer(cfg.get("custom_dict"))
-                log.info("舆情分析器已加载")
+                log.info("Sentiment analyzer loaded")
             except ImportError as e:
-                log.warning("舆情分析模块导入失败: %s", e)
+                log.warning("Failed to import sentiment analysis module: %s", e)
 
     def _init_notifier(self):
         if self._feishu_notifier:
@@ -93,9 +93,9 @@ class UnifiedScheduler:
                 self._feishu_notifier = FeishuNotifier(
                     fcfg["webhook_url"], fcfg.get("sign_secret", "")
                 )
-                log.info("飞书推送已加载")
+                log.info("Feishu notifier loaded")
             except ImportError as e:
-                log.warning("飞书推送模块导入失败: %s", e)
+                log.warning("Failed to import Feishu notifier module: %s", e)
 
     def _create_monitor(self, platform_name: str):
         MonitorClass = _load_monitor_class(platform_name)
@@ -105,17 +105,17 @@ class UnifiedScheduler:
         return MonitorClass(pcfg, self.db_path)
 
     def _execute_job(self, job: ScheduledJob):
-        log.info("[调度] 开始执行 %s", job.platform_name)
+        log.info("[Scheduler] Starting execution: %s", job.platform_name)
         run_id = self._record_start(job.platform_name)
 
         try:
             monitor = self._create_monitor(job.platform_name)
             if not monitor:
-                raise RuntimeError(f"无法创建 {job.platform_name} 监控器")
+                raise RuntimeError(f"Failed to create monitor for {job.platform_name}")
 
             if not monitor.verify_auth():
-                log.warning("[%s] 认证失效，跳过本次执行", job.platform_name)
-                self._record_finish(run_id, "error", error="认证失效")
+                log.warning("[%s] Authentication expired, skipping execution", job.platform_name)
+                self._record_finish(run_id, "error", error="Authentication expired")
                 return
 
             all_posts = []
@@ -133,24 +133,24 @@ class UnifiedScheduler:
                     for err in result.errors:
                         log.warning("[%s] %s", job.platform_name, err)
 
-            # 舆情分析
+            # Sentiment analysis
             if self._sentiment_analyzer and all_posts:
                 self._analyze_posts(all_posts)
 
-            # 存储
+            # Save to database
             monitor.save_posts(all_posts)
             monitor.save_comments(all_comments)
 
-            # 飞书推送
+            # Feishu push notifications
             if self._feishu_notifier and all_posts:
                 self._push_posts(all_posts)
 
             self._record_finish(run_id, "success", posts_found=len(all_posts))
-            log.info("[调度] %s 完成: %d 条帖子, %d 条评论",
+            log.info("[Scheduler] %s completed: %d posts, %d comments",
                      job.platform_name, len(all_posts), len(all_comments))
 
         except Exception as e:
-            log.error("[调度] %s 执行失败: %s", job.platform_name, e, exc_info=True)
+            log.error("[Scheduler] %s execution failed: %s", job.platform_name, e, exc_info=True)
             self._record_finish(run_id, "error", error=str(e))
 
     def _analyze_posts(self, posts: list[dict]):
@@ -184,7 +184,7 @@ class UnifiedScheduler:
             try:
                 self._feishu_notifier.push_post(post)
             except Exception as e:
-                log.warning("飞书推送失败: %s", e)
+                log.warning("Feishu push failed: %s", e)
 
         conn = get_connection(self.db_path)
         try:
@@ -229,7 +229,7 @@ class UnifiedScheduler:
         self._running = True
         self._init_analyzer()
         self._init_notifier()
-        log.info("调度器启动，%d 个任务", len(self.jobs))
+        log.info("Scheduler started, %d jobs", len(self.jobs))
 
         while self._running:
             with self._lock:
@@ -251,29 +251,29 @@ class UnifiedScheduler:
                     heapq.heappush(self.jobs, job)
                 continue
 
-            # 任务前随机延迟 30~180 秒
+            # Random pre-task delay 30~180 seconds
             pre_delay = random.randint(30, 180)
-            log.info("[调度] %s 将在 %d 秒后开始", job.platform_name, pre_delay)
+            log.info("[Scheduler] %s will start in %d seconds", job.platform_name, pre_delay)
             time.sleep(pre_delay)
 
             self._execute_job(job)
 
-            # 任务后随机延迟 30~300 秒
+            # Random post-task delay 30~300 seconds
             post_delay = random.randint(30, 300)
             time.sleep(post_delay)
 
-            # 下次执行时间加 ±10% 随机抖动
+            # Next run time with ±10% random jitter
             jitter = random.uniform(-0.1, 0.1) * job.interval_seconds
             job.next_run = time.time() + job.interval_seconds + jitter
             with self._lock:
                 heapq.heappush(self.jobs, job)
 
             next_str = datetime.fromtimestamp(job.next_run).strftime("%Y-%m-%d %H:%M:%S")
-            log.info("[%s] 下次执行: %s", job.platform_name, next_str)
+            log.info("[%s] Next run: %s", job.platform_name, next_str)
 
     def stop(self):
         self._running = False
-        log.info("调度器停止")
+        log.info("Scheduler stopped")
 
     def reload_config(self):
         self.config = load_config(reload=True)

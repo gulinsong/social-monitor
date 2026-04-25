@@ -1,12 +1,12 @@
 """
-XHS 扫码登录 — Playwright + Chrome 自动获取 Cookie
+XHS QR Login - Automated cookie retrieval via Playwright + Chrome
 
-流程：
-1. headless Chrome 打开登录页
-2. 页面自动创建二维码并轮询扫码状态
-3. 截取二维码图片返回给前端
-4. 后台线程持续运行 event loop，保持 JS 轮询
-5. 读取拦截到的 codeStatus 判断登录状态
+Flow:
+1. headless Chrome opens login page
+2. Page automatically creates QR code and polls scan status
+3. Capture QR code image and return to frontend
+4. Background thread keeps event loop running to maintain JS polling
+5. Read intercepted codeStatus to determine login status
 """
 
 import asyncio
@@ -36,7 +36,7 @@ class XhsQRLogin:
         self._ready = threading.Event()
 
     def _start_loop_thread(self):
-        """启动后台线程持续运行 event loop"""
+        """Start background thread to continuously run event loop"""
         self._loop = asyncio.new_event_loop()
 
         def _run():
@@ -47,7 +47,7 @@ class XhsQRLogin:
         self._thread.start()
 
     def _submit(self, coro):
-        """向后台 event loop 提交协程并等待结果"""
+        """Submit coroutine to background event loop and wait for result"""
         if self._loop is None or not self._loop.is_running():
             self._start_loop_thread()
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
@@ -72,15 +72,15 @@ class XhsQRLogin:
         try:
             return self._submit(self._get_qrcode_async())
         except Exception as e:
-            log.error("[XHS] Playwright 获取二维码失败: %s", e)
+            log.error("[XHS] Failed to get QR code via Playwright: %s", e)
             self._submit(self._cleanup())
-            return {"error": f"获取二维码失败: {e}"}
+            return {"error": f"Failed to get QR code: {e}"}
 
     def check_scan(self, qrid: str = "") -> dict:
         try:
             return self._submit(self._check_login_async())
         except Exception as e:
-            log.error("[XHS] 检查扫码状态失败: %s", e)
+            log.error("[XHS] Failed to check scan status: %s", e)
             return {"status": "error", "message": str(e)}
 
     def close(self):
@@ -94,7 +94,7 @@ class XhsQRLogin:
     async def _get_qrcode_async(self) -> dict:
         await self._init_browser()
 
-        # 拦截 edith API 响应
+        # Intercept edith API responses
         async def on_response(resp):
             url = resp.url
             try:
@@ -113,9 +113,9 @@ class XhsQRLogin:
                     log.info("[XHS] codeStatus=%s", status)
 
                     if status == 2:
-                        # 登录成功，等待页面完成跳转并设置新 cookie
+                        # Login successful, wait for page to finish redirecting and set new cookies
                         await self.page.wait_for_timeout(3000)
-                        # 等待页面跳转到非登录页
+                        # Wait for page to navigate away from login page
                         try:
                             await self.page.wait_for_url(
                                 lambda url: "login" not in url, timeout=10000
@@ -135,7 +135,7 @@ class XhsQRLogin:
         await self.page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=20000)
         await self.page.wait_for_timeout(4000)
 
-        # 获取二维码图片
+        # Get QR code image
         qr_el = await self.page.query_selector("img.qrcode-img")
         if not qr_el:
             qr_el = await self.page.query_selector("div[class*='qrcode'] img")
@@ -171,15 +171,15 @@ class XhsQRLogin:
 
     async def _check_login_async(self) -> dict:
         if not self.page:
-            return {"status": "error", "message": "浏览器未启动"}
+            return {"status": "error", "message": "Browser not started"}
 
-        # 检查是否已拦截到登录成功
+        # Check if login success has been intercepted
         if self._logged_in_cookies:
             cookies = self._logged_in_cookies
             await self._cleanup()
             return {"status": "success", "cookies": cookies}
 
-        # 等待页面 JS 的下一次轮询（约 2-3 秒间隔）
+        # Wait for the next JS poll cycle (approx. 2-3 second interval)
         await asyncio.sleep(3)
 
         if self._logged_in_cookies:
@@ -188,9 +188,9 @@ class XhsQRLogin:
             return {"status": "success", "cookies": cookies}
 
         if self._last_code_status == 1:
-            return {"status": "scanned", "message": "已扫码，请在手机上确认..."}
+            return {"status": "scanned", "message": "Scanned, please confirm on your phone..."}
 
-        return {"status": "waiting", "message": "等待扫码..."}
+        return {"status": "waiting", "message": "Waiting for scan..."}
 
     async def _cleanup(self):
         try:

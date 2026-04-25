@@ -26,15 +26,15 @@ class RateLimiter:
 
         if self.consecutive_failures > 0:
             delay *= 2 ** self.consecutive_failures
-            log.warning("连续失败 %d 次，退避延迟 %.1f 秒", self.consecutive_failures, delay)
+            log.warning("Consecutive failures: %d, backoff delay %.1f seconds", self.consecutive_failures, delay)
 
-        # 每小时限额（滑动窗口）
+        # Hourly rate limit (sliding window)
         now = time.time()
         self.request_times = [t for t in self.request_times if now - t < 3600]
         if len(self.request_times) >= self.max_per_hour:
             wait_until = self.request_times[0] + 3600
             sleep_seconds = wait_until - now
-            log.warning("已达每小时请求上限 %d，等待 %.0f 秒", self.max_per_hour, sleep_seconds)
+            log.warning("Hourly request limit reached: %d, waiting %.0f seconds", self.max_per_hour, sleep_seconds)
             time.sleep(sleep_seconds)
             self.request_times = self.request_times[1:]
 
@@ -48,5 +48,5 @@ class RateLimiter:
         self.consecutive_failures += 1
         if self.consecutive_failures >= self.max_failures:
             raise CircuitBreakerError(
-                f"连续失败 {self.consecutive_failures} 次，触发熔断"
+                f"Consecutive failures: {self.consecutive_failures}, circuit breaker triggered"
             )

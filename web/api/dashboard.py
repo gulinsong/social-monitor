@@ -1,4 +1,4 @@
-"""仪表盘 API"""
+"""Dashboard API"""
 import logging
 from flask import Blueprint, jsonify, current_app
 from db.schema import get_connection

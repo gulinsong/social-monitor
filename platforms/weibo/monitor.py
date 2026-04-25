@@ -1,5 +1,5 @@
 """
-微博关键词监控 — 改造自 legacy/monitor_weibo/weibo_monitor.py
+Weibo keyword monitoring - adapted from legacy/monitor_weibo/weibo_monitor.py
 """
 
 import logging
@@ -34,7 +34,7 @@ class Monitor(BaseMonitor):
             data = resp.get("data", {})
             if not data.get("login", False):
                 self._mark_auth_expired()
-                log.warning("[微博] Cookie 已失效 (login=false)")
+                log.warning("[Weibo] Cookie expired (login=false)")
                 return False
             uid = data.get("uid", "")
             if uid:
@@ -45,12 +45,12 @@ class Monitor(BaseMonitor):
                 )
                 conn.commit()
                 conn.close()
-                log.info("[微博] 认证有效, UID: %s****", uid[:4])
+                log.info("[Weibo] Auth valid, UID: %s****", uid[:4])
                 return True
             self._mark_auth_expired()
             return False
         except Exception as e:
-            log.warning("[微博] 认证检查失败: %s", e)
+            log.warning("[Weibo] Auth check failed: %s", e)
             return False
 
     def _get_auth_conn(self):
@@ -68,7 +68,7 @@ class Monitor(BaseMonitor):
             all_posts.extend(posts)
             result.posts_scanned += len(posts)
 
-        # 去重
+        # Deduplicate
         seen = set()
         unique = []
         for p in all_posts:
@@ -78,7 +78,7 @@ class Monitor(BaseMonitor):
 
         result.new_posts = unique
 
-        # 爬取评论（限制最多对前 5 篇有评论的帖子爬取，每篇最多 10 条）
+        # Crawl comments (limited to first 5 posts with comments, max 10 per post)
         max_comment_posts = self.config.get("max_comment_posts", 5)
         max_comments = self.config.get("max_comments_per_post", 10)
         commented = 0
@@ -141,7 +141,7 @@ class Monitor(BaseMonitor):
 
     @staticmethod
     def _parse_time(raw: str) -> str:
-        """将微博时间格式转为 ISO 格式"""
+        """Convert Weibo time format to ISO format"""
         if not raw:
             return ""
         try:
@@ -186,8 +186,8 @@ class Monitor(BaseMonitor):
         return {
             "qr_url": "https://passport.weibo.cn/signin/login",
             "uuid": "manual",
-            "message": "请用微博 APP 扫码登录，或手动输入 Cookie",
+            "message": "Please scan QR code with Weibo APP to login, or enter cookies manually",
         }
 
     def check_login_status(self, uuid: str) -> dict:
-        return {"status": "manual_required", "message": "微博需手动提供 Cookie"}
+        return {"status": "manual_required", "message": "Weibo requires manual cookie input"}

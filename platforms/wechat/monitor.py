@@ -1,6 +1,6 @@
 """
-微信公众号监控 — 改造自 legacy/monitor_wechat/wechat_monitor.py
-双数据源：搜狗微信搜索 + 微信读书 (WeRead)
+WeChat Official Account monitoring - adapted from legacy/monitor_wechat/wechat_monitor.py
+Dual data sources: Sogou WeChat search + WeRead
 """
 
 import hashlib
@@ -38,15 +38,15 @@ class Monitor(BaseMonitor):
         sogou_articles = []
         weread_articles = []
 
-        # 搜狗源
+        # Sogou source
         if self.config.get("sogou", {}).get("enabled", True):
             sogou_articles = self._crawl_sogou(keyword, max_pages)
 
-        # 微信读书源
+        # WeRead source
         if self.config.get("weread", {}).get("enabled", True):
             weread_articles = self._crawl_weread(keyword)
 
-        # 合并去重
+        # Merge and deduplicate
         all_articles = []
         seen_keys = set()
 
@@ -64,7 +64,7 @@ class Monitor(BaseMonitor):
                 seen_keys.add(key)
                 all_articles.append(a)
 
-        # 转为统一格式
+        # Convert to unified format
         for article in all_articles:
             result.new_posts.append({
                 "id": self._dedupe_key(article.get("url", "")),
@@ -85,7 +85,7 @@ class Monitor(BaseMonitor):
 
         result.posts_scanned = len(all_articles)
 
-        # 检查哪些是新的（不在数据库中）
+        # Check which are new (not in database)
         conn = get_connection(self.db_path)
         try:
             existing_ids = {row[0] for row in conn.execute("SELECT id FROM posts WHERE platform='wechat'").fetchall()}
@@ -120,7 +120,7 @@ class Monitor(BaseMonitor):
                 resp.raise_for_status()
                 resp.encoding = "utf-8"
             except requests.RequestException as e:
-                log.error("[搜狗] 请求失败: %s", e)
+                log.error("[Sogou] Request failed: %s", e)
                 break
 
             soup = BeautifulSoup(resp.text, "lxml")
@@ -130,7 +130,7 @@ class Monitor(BaseMonitor):
             if page < max_pages:
                 time.sleep(random.uniform(delay_cfg.get("min", 3.0), delay_cfg.get("max", 6.0)))
 
-        log.info("[搜狗] 关键词'%s'获取 %d 条", keyword, len(all_results))
+        log.info("[Sogou] Keyword '%s' retrieved %d articles", keyword, len(all_results))
         return all_results
 
     def _parse_sogou_page(self, soup: BeautifulSoup, page: int) -> list[dict]:
@@ -172,29 +172,29 @@ class Monitor(BaseMonitor):
                     "pub_time": pub_time,
                 })
 
-        log.info("[搜狗] 第%d页解析 %d 条", page, len(results))
+        log.info("[Sogou] Page %d parsed %d articles", page, len(results))
         return results
 
     def _crawl_weread(self, keyword: str) -> list[dict]:
         try:
             from platforms.wechat.weread_client import WeReadClient
         except ImportError:
-            log.warning("[WeRead] 模块导入失败，跳过")
+            log.warning("[WeRead] Module import failed, skipping")
             return []
 
         client = WeReadClient(self.db_path)
         account = client.load_account()
         if not account or not account.get("token"):
-            log.info("[WeRead] 未登录，跳过")
+            log.info("[WeRead] Not logged in, skipping")
             return []
 
         try:
             articles = client.fetch_all_subscribed(keyword=keyword)
         except Exception as e:
-            log.error("[WeRead] 获取失败: %s", e)
+            log.error("[WeRead] Failed to fetch articles: %s", e)
             return []
 
-        log.info("[WeRead] 获取 %d 篇文章", len(articles))
+        log.info("[WeRead] Retrieved %d articles", len(articles))
         return articles
 
     @staticmethod
@@ -208,11 +208,11 @@ class Monitor(BaseMonitor):
         return hashlib.md5(url.encode()).hexdigest()[:12]
 
     def verify_auth(self) -> bool:
-        # 搜狗无需认证，始终可用
+        # Sogou requires no authentication, always available
         return True
 
     def get_comments(self, post_id: str, max_count: int = 20) -> list[dict]:
-        # 微信公众号文章评论无法通过此方式获取
+        # WeChat article comments cannot be retrieved this way
         return []
 
     def get_login_qrcode(self) -> dict:
@@ -224,7 +224,7 @@ class Monitor(BaseMonitor):
             return {
                 "qr_url": "https://weread.qq.com",
                 "uuid": "",
-                "message": "WeRead 登录不可用",
+                "message": "WeRead login unavailable",
             }
 
     def check_login_status(self, uuid: str) -> dict:

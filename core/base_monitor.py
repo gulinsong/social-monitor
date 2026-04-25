@@ -25,7 +25,7 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
 ]
 
-# 响应头随机排列顺序（模拟浏览器波动）
+# Randomized header order (simulates browser variation)
 ACCEPT_LANGUAGES = [
     "zh-CN,zh;q=0.9,en;q=0.8",
     "zh-CN,zh;q=0.9",
@@ -97,7 +97,7 @@ class BaseMonitor(ABC):
         self.session.close()
         self.session = requests.Session()
         self._configure_session()
-        log.debug("[%s] Session 已重建", self.PLATFORM_NAME)
+        log.debug("[%s] Session rebuilt", self.PLATFORM_NAME)
 
     def _load_cookies(self):
         conn = get_connection(self.db_path)
@@ -154,7 +154,7 @@ class BaseMonitor(ABC):
                 if self._request_count % self._session_rebuild_interval == 0:
                     self._rebuild_session()
 
-                # 每次请求随机化部分 headers
+                # Randomize some headers per request
                 self.session.headers["User-Agent"] = random.choice(USER_AGENTS)
                 self.session.headers["Accept-Language"] = random.choice(ACCEPT_LANGUAGES)
 
@@ -163,15 +163,15 @@ class BaseMonitor(ABC):
                 resp = self.session.request(method, url, params=params, timeout=15, **kwargs)
                 resp.raise_for_status()
 
-                # 检测登录失效
+                # Detect expired login
                 if resp.status_code == 403:
-                    log.error("[%s] 被限流(403)，停止请求", self.PLATFORM_NAME)
+                    log.error("[%s] Rate limited (403), stopping requests", self.PLATFORM_NAME)
                     self._mark_auth_expired()
                     self.rate_limiter.record_failure()
                     return None
 
-                if "登录" in resp.text and "密码" in resp.text:
-                    log.error("[%s] Cookie 已失效", self.PLATFORM_NAME)
+                if "登录" in resp.text and "密码" in resp.text:  # Detect Chinese login page
+                    log.error("[%s] Cookie expired", self.PLATFORM_NAME)
                     self._mark_auth_expired()
                     self.rate_limiter.record_failure()
                     return None
@@ -186,7 +186,7 @@ class BaseMonitor(ABC):
             except CircuitBreakerError:
                 raise
             except requests.exceptions.RequestException as e:
-                log.warning("[%s] 请求失败 (%d/%d): %s", self.PLATFORM_NAME, attempt + 1, retries, e)
+                log.warning("[%s] Request failed (%d/%d): %s", self.PLATFORM_NAME, attempt + 1, retries, e)
                 self.rate_limiter.record_failure()
                 if attempt < retries - 1:
                     time.sleep(10 * (attempt + 1))
@@ -227,7 +227,7 @@ class BaseMonitor(ABC):
                     ),
                 )
             conn.commit()
-            log.info("[%s] 保存 %d 条帖子", self.PLATFORM_NAME, len(posts))
+            log.info("[%s] Saved %d posts", self.PLATFORM_NAME, len(posts))
         finally:
             conn.close()
 
@@ -253,7 +253,7 @@ class BaseMonitor(ABC):
                     ),
                 )
             conn.commit()
-            log.info("[%s] 保存 %d 条评论", self.PLATFORM_NAME, len(comments))
+            log.info("[%s] Saved %d comments", self.PLATFORM_NAME, len(comments))
         finally:
             conn.close()
 
@@ -270,7 +270,7 @@ class BaseMonitor(ABC):
         pass
 
     def get_login_qrcode(self) -> dict:
-        return {"error": f"{self.PLATFORM_NAME} 暂不支持扫码登录"}
+        return {"error": f"{self.PLATFORM_NAME} does not support QR code login"}
 
     def check_login_status(self, uuid: str) -> dict:
         return {"status": "unsupported"}

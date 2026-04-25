@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-定时调度器 - 按配置间隔执行爬取任务
-也可以用系统 crontab 替代
+Scheduled Task Runner - Executes crawl tasks at configured intervals
+Can also be replaced by system crontab
 """
 
 import signal
@@ -17,7 +17,7 @@ running = True
 
 def signal_handler(sig, frame):
     global running
-    print("\n[*] 收到停止信号，优雅退出...")
+    print("\n[*] Stop signal received, graceful shutdown...")
     running = False
 
 
@@ -31,27 +31,27 @@ def run_scheduler():
     signal.signal(signal.SIGTERM, signal_handler)
 
     monitor = WeiboMonitor(config)
-    print(f"[*] 调度器启动，间隔 {config['interval_hours']} 小时")
-    print(f"[*] 监控关键词: {', '.join(config['keywords'])}")
-    print(f"[*] 按 Ctrl+C 停止\n")
+    print(f"[*] Scheduler started, interval: {config['interval_hours']} hours")
+    print(f"[*] Monitoring keywords: {', '.join(config['keywords'])}")
+    print(f"[*] Press Ctrl+C to stop\n")
 
     while running:
         try:
             monitor.run_once()
         except Exception as e:
-            print(f"[!] 爬取出错: {e}")
+            print(f"[!] Crawl error: {e}")
 
         next_time = datetime.now().timestamp() + interval
         next_str = datetime.fromtimestamp(next_time).strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[*] 下次爬取: {next_str}")
+        print(f"[*] Next crawl: {next_str}")
 
-        # 可中断的等待
+        # Interruptible wait
         for _ in range(int(interval)):
             if not running:
                 break
             time.sleep(1)
 
-    print("[*] 调度器已停止")
+    print("[*] Scheduler stopped")
 
 
 if __name__ == "__main__":

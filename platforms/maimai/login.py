@@ -1,12 +1,12 @@
 """
-脉脉扫码登录 — Playwright 打开登录页，截取真实二维码
+Maimai QR Login - Playwright opens login page, captures real QR code
 
-流程：
-1. headless Chrome 打开 maimai.cn/platform/login
-2. 拦截 get-qr-code API 获取 qr_code token
-3. 截取页面上的二维码图片返回给前端
-4. 后台线程保持浏览器运行，轮询 login-yrcode API 检查扫码状态
-5. 登录成功后提取 Cookie
+Flow:
+1. headless Chrome opens maimai.cn/platform/login
+2. Intercept get-qr-code API to get qr_code token
+3. Capture the QR code image on the page and return to frontend
+4. Background thread keeps browser running, polls login-yrcode API to check scan status
+5. Extract cookies after successful login
 """
 
 import asyncio
@@ -76,15 +76,15 @@ class MaimaiQRLogin:
         try:
             return self._submit(self._get_qrcode_async())
         except Exception as e:
-            log.error("[MM] Playwright 获取二维码失败: %s", e)
+            log.error("[MM] Failed to get QR code via Playwright: %s", e)
             self._submit(self._cleanup())
-            return {"error": f"获取二维码失败: {e}"}
+            return {"error": f"Failed to get QR code: {e}"}
 
     def check_scan(self, qrid: str = "") -> dict:
         try:
             return self._submit(self._check_login_async())
         except Exception as e:
-            log.error("[MM] 检查扫码状态失败: %s", e)
+            log.error("[MM] Failed to check scan status: %s", e)
             return {"status": "error", "message": str(e)}
 
     def close(self):
@@ -98,7 +98,7 @@ class MaimaiQRLogin:
     async def _get_qrcode_async(self) -> dict:
         await self._init_browser()
 
-        # 拦截 API 响应
+        # Intercept API responses
         async def on_response(resp):
             url = resp.url
             try:
@@ -117,29 +117,29 @@ class MaimaiQRLogin:
                     log.info("[MM] login-yrcode rcode=%s", rcode)
 
                     if data.get("result") == "ok":
-                        # 登录成功
+                        # Login successful
                         await self.page.wait_for_timeout(2000)
                         cookies = await self.context.cookies()
                         self._logged_in_cookies = "; ".join(
                             f"{c['name']}={c['value']}" for c in cookies
                         )
-                        log.info("[MM] 登录成功，获取到 Cookie")
+                        log.info("[MM] Login successful, cookies obtained")
             except Exception:
                 pass
 
         self.page.on("response", lambda r: asyncio.ensure_future(on_response(r)))
 
         await self.page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=20000)
-        # 等待二维码加载
+        # Wait for QR code to load
         await self.page.wait_for_timeout(4000)
 
-        # 先尝试点击切换到二维码模式（如果当前是账号密码模式）
+        # Try clicking to switch to QR code mode (if currently in username/password mode)
         qr_switch = await self.page.query_selector(".p-login-switch.qrcode")
         if qr_switch:
             await qr_switch.click()
             await self.page.wait_for_timeout(2000)
 
-        # 尝试截取页面上的二维码图片
+        # Try to capture the QR code image on the page
         qr_el = (
             await self.page.query_selector("canvas")
             or await self.page.query_selector("img[src*='qr']")
@@ -152,44 +152,44 @@ class MaimaiQRLogin:
             b64 = base64.b64encode(screenshot).decode("ascii")
             return {"qr_image": f"data:image/png;base64,{b64}", "qrid": self._qr_code}
 
-        # fallback: 截取整个登录区域
+        # Fallback: screenshot the entire login area
         login_box = await self.page.query_selector(".p-login-qrcode-box")
         if login_box:
             screenshot = await login_box.screenshot(type="png")
             b64 = base64.b64encode(screenshot).decode("ascii")
             return {"qr_image": f"data:image/png;base64,{b64}", "qrid": self._qr_code}
 
-        # 最终 fallback: 如果拿到了 qr_code token，用 requests 帮轮询
+        # Final fallback: if qr_code token was obtained, use requests to poll
         if self._qr_code:
-            log.warning("[MM] 未截取到二维码图片，但有 qr_code token")
-            return {"qrid": self._qr_code, "message": "二维码获取异常，请重试"}
+            log.warning("[MM] QR code image not captured, but qr_code token available")
+            return {"qrid": self._qr_code, "message": "QR code retrieval failed, please retry"}
 
-        return {"error": "未找到二维码元素"}
+        return {"error": "QR code element not found"}
 
     async def _check_login_async(self) -> dict:
-        # 1. 拦截器已捕获登录成功
+        # 1. Interceptor has captured successful login
         if self._logged_in_cookies:
             cookies = self._logged_in_cookies
             await self._cleanup()
             return {"status": "success", "cookies": cookies}
 
-        # 2. 检查页面是否已跳转离开登录页（登录成功后浏览器自动跳转）
+        # 2. Check if page has navigated away from login page (browser auto-redirects after login)
         if self.page and "/login" not in self.page.url:
             await asyncio.sleep(2)
             try:
                 cookies = await self.context.cookies()
                 if cookies:
                     cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies)
-                    log.info("[MM] 页面已跳转，提取 Cookie 成功")
+                    log.info("[MM] Page redirected, cookies extracted successfully")
                     await self._cleanup()
                     return {"status": "success", "cookies": cookie_str}
             except Exception:
                 pass
 
-        # 3. 等待页面 JS 下一次轮询
+        # 3. Wait for the next JS poll cycle
         await asyncio.sleep(3)
 
-        # 再检查一次
+        # Check once more
         if self._logged_in_cookies:
             cookies = self._logged_in_cookies
             await self._cleanup()
@@ -206,15 +206,15 @@ class MaimaiQRLogin:
             except Exception:
                 pass
 
-        # 4. 状态码判断
+        # 4. Status code check
         if self._last_rcode == -11060004:
             await self._cleanup()
-            return {"status": "expired", "message": "二维码已过期，请重新获取"}
+            return {"status": "expired", "message": "QR code expired, please get a new one"}
 
         if self._last_rcode == -11060006:
-            return {"status": "scanned", "message": "已扫码，请在手机上确认..."}
+            return {"status": "scanned", "message": "Scanned, please confirm on your phone..."}
 
-        return {"status": "waiting", "message": "等待扫码..."}
+        return {"status": "waiting", "message": "Waiting for scan..."}
 
     async def _cleanup(self):
         try:

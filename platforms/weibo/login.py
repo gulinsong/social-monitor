@@ -1,11 +1,11 @@
 """
-微博扫码登录 — 通过 Playwright + Chrome 自动获取 Cookie
+Weibo QR Login - Automated cookie retrieval via Playwright + Chrome
 
-流程：
-1. 后端启动 headless Chrome 打开微博登录页
-2. 截取二维码图片返回给前端
-3. 前端展示二维码，用户用微博 APP 扫码
-4. 后端轮询检测登录成功后提取 Cookie
+Flow:
+1. Backend launches headless Chrome and opens the Weibo login page
+2. Captures QR code image and returns to frontend
+3. Frontend displays QR code for user to scan with Weibo APP
+4. Backend polls for successful login and extracts cookies
 """
 
 import asyncio
@@ -47,7 +47,7 @@ class WeiboQRLogin:
         await self._start_browser()
         await self.page.goto(LOGIN_URL, wait_until="networkidle", timeout=20000)
 
-        # 桌面端默认显示二维码，直接等待出现
+        # Desktop view shows QR code by default, wait for it to appear
         qr_el = None
         for selector in [
             "img[src*='qr.weibo.cn']",
@@ -64,14 +64,14 @@ class WeiboQRLogin:
                 continue
 
         if qr_el:
-            # 放大截图使二维码更清晰
+            # Scale up screenshot for clearer QR code
             box = await qr_el.bounding_box()
             if box and box["width"] < 200:
                 scale = 3
                 new_w = int(box["width"] * scale)
                 new_h = int(box["height"] * scale)
                 screenshot = await qr_el.screenshot(type="png", scale="device")
-                # 用 Pillow 放大
+                # Scale up with Pillow
                 import io
                 from PIL import Image
                 img = Image.open(io.BytesIO(screenshot))
@@ -89,11 +89,11 @@ class WeiboQRLogin:
 
     async def _check_login_async(self) -> dict:
         if not self.page:
-            return {"status": "error", "message": "浏览器未启动"}
+            return {"status": "error", "message": "Browser not started"}
 
         current_url = self.page.url
 
-        # 登录成功后会跳转到 weibo.com 或 weibo.cn
+        # After successful login, browser redirects to weibo.com or weibo.cn
         if ("weibo.com" in current_url or "weibo.cn" in current_url) and "passport" not in current_url:
             cookies = await self.context.cookies()
             cookie_str = "; ".join(
@@ -103,19 +103,19 @@ class WeiboQRLogin:
             if sub:
                 await self._cleanup()
                 return {"status": "success", "cookies": cookie_str}
-            return {"status": "scanned", "message": "已扫码，等待跳转..."}
+            return {"status": "scanned", "message": "Scanned, waiting for redirect..."}
 
-        # 检查页面是否有"扫码成功"提示
+        # Check if page shows a "scan successful" indicator
         try:
             el = await self.page.query_selector(".success, .scanned, [class*='success']")
             if el:
                 text = await el.text_content()
-                if text and "成功" in text:
-                    return {"status": "scanned", "message": "已扫码，请确认..."}
+                if text and "success" in text.lower():
+                    return {"status": "scanned", "message": "Scanned, please confirm..."}
         except Exception:
             pass
 
-        return {"status": "waiting", "message": "等待扫码..."}
+        return {"status": "waiting", "message": "Waiting for scan..."}
 
     async def _cleanup(self):
         try:
@@ -132,15 +132,15 @@ class WeiboQRLogin:
         try:
             return self._run(self._get_qrcode_async())
         except Exception as e:
-            log.error("[微博] Playwright 获取二维码失败: %s", e)
+            log.error("[Weibo] Failed to get QR code via Playwright: %s", e)
             self._run(self._cleanup())
-            return {"error": f"获取二维码失败: {e}"}
+            return {"error": f"Failed to get QR code: {e}"}
 
     def check_scan(self, qrid: str = "") -> dict:
         try:
             return self._run(self._check_login_async())
         except Exception as e:
-            log.error("[微博] 检查扫码状态失败: %s", e)
+            log.error("[Weibo] Failed to check scan status: %s", e)
             return {"status": "error", "message": str(e)}
 
     def close(self):

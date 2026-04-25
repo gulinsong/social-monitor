@@ -1,6 +1,6 @@
 """
-微信读书 (WeRead) API 客户端 — 改造自 legacy
-通过 wewe-rss 代理获取公众号文章
+WeRead API client - adapted from legacy
+Fetches official account articles via wewe-rss proxy
 """
 
 import base64
@@ -124,13 +124,13 @@ class WeReadClient:
         try:
             resp = self.session.request(method, url, **kwargs)
             if resp.status_code == 401:
-                log.warning("[WeRead] Token 过期")
+                log.warning("[WeRead] Token expired")
                 self.account = None
                 return None
             resp.raise_for_status()
             return resp.json()
         except requests.RequestException as e:
-            log.error("[WeRead] 请求失败: %s", e)
+            log.error("[WeRead] Request failed: %s", e)
             return None
 
     def _request_no_auth(self, method: str, path: str, **kwargs) -> dict | None:
@@ -141,7 +141,7 @@ class WeReadClient:
             resp.raise_for_status()
             return resp.json()
         except requests.RequestException as e:
-            log.error("[WeRead] 请求失败: %s", e)
+            log.error("[WeRead] Request failed: %s", e)
             return None
 
     def get_mp_articles(self, mp_id: str, page: int = 1) -> list[dict]:
@@ -194,7 +194,7 @@ class WeReadClient:
                 "qr_url": result.get("scanUrl", ""),
                 "uuid": result.get("uuid", ""),
             }
-        return {"qr_url": PROXY_URL, "uuid": "", "message": "获取二维码失败"}
+        return {"qr_url": PROXY_URL, "uuid": "", "message": "Failed to get QR code"}
 
     def check_login_status(self, uuid: str) -> dict:
         if not uuid:

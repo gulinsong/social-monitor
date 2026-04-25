@@ -5,21 +5,21 @@ import requests
 
 log = logging.getLogger(__name__)
 
-DEFAULT_PROMPT = """你是一个舆情分析专家。分析以下社交媒体文本，返回JSON格式结果：
+DEFAULT_PROMPT = """You are a sentiment analysis expert. Analyze the following social media text and return the result in JSON format:
 
-文本：{text}
+Text: {text}
 
-请返回：
+Please return:
 {{
   "sentiment": "positive/negative/neutral",
-  "score": 0.0到1.0之间的数值,
-  "sarcastic": true/false（是否包含反讽），
-  "topics": ["话题1", "话题2"],
-  "summary": "一句话摘要",
+  "score": a value between 0.0 and 1.0,
+  "sarcastic": true/false (whether it contains sarcasm),
+  "topics": ["topic1", "topic2"],
+  "summary": "a one-sentence summary",
   "risk_level": "low/medium/high"
 }}
 
-只返回JSON，不要其他内容。"""
+Return only JSON, no other content."""
 
 
 class LLMAnalyzer:
@@ -52,14 +52,14 @@ class LLMAnalyzer:
             )
             resp.raise_for_status()
             content = resp.json()["choices"][0]["message"]["content"]
-            # 尝试提取 JSON
+            # Try to extract JSON
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0]
             elif "```" in content:
                 content = content.split("```")[1].split("```")[0]
             return json.loads(content.strip())
         except Exception as e:
-            log.error("LLM 分析失败: %s", e)
+            log.error("LLM analysis failed: %s", e)
             return None
 
     def analyze_batch(self, texts: list[str]) -> list[dict | None]:

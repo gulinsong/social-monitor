@@ -1,5 +1,5 @@
 """
-数据迁移脚本：从旧 monitor_weibo SQLite + monitor_wechat JSON 迁移到统一数据库
+Data migration script: migrate from legacy monitor_weibo SQLite + monitor_wechat JSON to unified database
 """
 
 import json
@@ -64,7 +64,7 @@ def migrate_weibo_comments(old_conn, new_conn) -> int:
 
 def migrate_weibo() -> tuple[int, int]:
     if not LEGACY_WEIBO_DB.exists():
-        print(f"[SKIP] 旧微博数据库不存在: {LEGACY_WEIBO_DB}")
+        print(f"[SKIP] Legacy Weibo database not found: {LEGACY_WEIBO_DB}")
         return 0, 0
 
     old_conn = sqlite3.connect(str(LEGACY_WEIBO_DB))
@@ -83,7 +83,7 @@ def migrate_weibo() -> tuple[int, int]:
 
 def migrate_wechat() -> int:
     if not LEGACY_WECHAT_JSON.exists():
-        print(f"[SKIP] 旧微信数据不存在: {LEGACY_WECHAT_JSON}")
+        print(f"[SKIP] Legacy WeChat data not found: {LEGACY_WECHAT_JSON}")
         return 0
 
     articles = json.loads(LEGACY_WECHAT_JSON.read_text(encoding="utf-8"))
@@ -101,7 +101,7 @@ def migrate_wechat() -> int:
                 """INSERT OR IGNORE INTO posts
                    (id, platform, keyword, user_name, title, content, url,
                     created_at, fetched_at, extra)
-                   VALUES (?, 'wechat', '迪子', ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, 'wechat', 'target-keyword', ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     url_key,
                     article.get("account", ""),
@@ -122,19 +122,19 @@ def migrate_wechat() -> int:
 
 def run_migration():
     print("=" * 50)
-    print("数据迁移开始")
+    print("Data migration started")
     print("=" * 50)
 
     init_db(UNIFIED_DB)
-    print(f"[OK] 统一数据库已初始化: {UNIFIED_DB}")
+    print(f"[OK] Unified database initialized: {UNIFIED_DB}")
 
     posts, comments = migrate_weibo()
-    print(f"[OK] 微博迁移完成: {posts} 条帖子, {comments} 条评论")
+    print(f"[OK] Weibo migration completed: {posts} posts, {comments} comments")
 
     articles = migrate_wechat()
-    print(f"[OK] 微信迁移完成: {articles} 篇文章")
+    print(f"[OK] WeChat migration completed: {articles} articles")
 
-    # 验证
+    # Verify
     conn = get_connection(UNIFIED_DB)
     try:
         total_posts = conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
@@ -144,9 +144,9 @@ def run_migration():
         ).fetchall()
 
         print(f"\n{'=' * 50}")
-        print(f"迁移完成！总计 {total_posts} 条帖子, {total_comments} 条评论")
+        print(f"Migration completed! Total {total_posts} posts, {total_comments} comments")
         for row in by_platform:
-            print(f"  - {row['platform']}: {row['cnt']} 条帖子")
+            print(f"  - {row['platform']}: {row['cnt']} posts")
         print(f"{'=' * 50}")
     finally:
         conn.close()

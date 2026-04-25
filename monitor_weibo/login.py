@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-微博扫码登录 - 终端二维码，手机扫码获取Cookie
-适用于无GUI的远程服务器
+Weibo QR Code Login - Terminal QR code, scan with phone to get Cookie
+Suitable for headless remote servers
 """
 
 import json
@@ -23,8 +23,8 @@ def login():
         "Referer": "https://m.weibo.cn/",
     })
 
-    # Step 1: 获取二维码token
-    print("[*] 正在获取登录二维码...")
+    # Step 1: Get QR code token
+    print("[*] Getting login QR code...")
     qr_url = "https://login.sina.com.cn/ssologin/scanqrcode/url"
     params = {
         "entry": "mweibo",
@@ -43,13 +43,13 @@ def login():
         qrid = data.get("data", {}).get("qrid", "")
         alt = data.get("data", {}).get("alt", "")
     except Exception:
-        # 备用：直接构造扫码页面URL
+        # Fallback: directly construct the scan page URL
         resp = session.get("https://passport.weibo.cn/signin/login", timeout=10)
-        # 从页面获取
-        print("[!] 标准接口不可用，使用备用方案...")
+        # Extract from page
+        print("[!] Standard API unavailable, using fallback...")
 
-    # 方案B：使用passport.weibo.cn的扫码登录
-    print("[*] 通过passport获取扫码地址...")
+    # Plan B: Use passport.weibo.cn QR code login
+    print("[*] Getting scan URL via passport...")
     try:
         resp = session.get(
             "https://passport.weibo.com/sso/qrcode/image",
@@ -61,14 +61,14 @@ def login():
             qr_src = data.get("data", {}).get("image", "")
             qrid = data.get("data", {}).get("qrid", "")
     except Exception as e:
-        print(f"[!] 接口访问异常: {e}")
+        print(f"[!] API access error: {e}")
 
-    # 方案C：直接生成二维码让用户扫passport登录页
+    # Plan C: Generate QR code for user to scan the passport login page
     passport_login_url = "https://passport.weibo.cn/signin/login"
 
     print("\n" + "=" * 55)
-    print("  请用【微博手机APP】扫描下方二维码登录")
-    print("  二维码有效期约 5 分钟")
+    print("  Please scan the QR code below with the [Weibo mobile app] to log in")
+    print("  QR code expires in about 5 minutes")
     print("=" * 55)
 
     qr = qrcode.QRCode(border=1)
@@ -76,37 +76,37 @@ def login():
     qr.make(fit=True)
     qr.print_ascii(invert=True)
 
-    print(f"\n  如果二维码无法扫描，手动打开:")
+    print(f"\n  If you cannot scan the QR code, open manually:")
     print(f"  {passport_login_url}")
     print()
 
-    # 提示用户在浏览器登录后粘贴Cookie
+    # Prompt user to paste Cookie after logging in via browser
     print("=" * 55)
-    print("  由于远程服务器限制，请按以下步骤操作:")
+    print("  Due to remote server limitations, please follow these steps:")
     print()
-    print("  1. 在你本地电脑浏览器打开:")
+    print("  1. Open this URL in your local browser:")
     print("     https://m.weibo.cn")
     print()
-    print("  2. 登录你的微博账号")
+    print("  2. Log in to your Weibo account")
     print()
-    print("  3. 按 F12 打开开发者工具")
-    print("     → 切换到 Console(控制台)")
+    print("  3. Press F12 to open Developer Tools")
+    print("     -> Switch to Console tab")
     print()
-    print("  4. 输入并回车:")
+    print("  4. Type and press Enter:")
     print('     document.cookie')
     print()
-    print("  5. 复制输出的字符串")
-    print("     (类似: SUB=_2A...; SUBP=003...; ...)")
+    print("  5. Copy the output string")
+    print("     (e.g.: SUB=_2A...; SUBP=003...; ...)")
     print("=" * 55)
 
-    cookie = input("\n请粘贴Cookie内容: ").strip()
+    cookie = input("\nPlease paste the Cookie content: ").strip()
 
     if not cookie:
-        print("[!] 未输入Cookie，退出")
+        print("[!] No Cookie entered, exiting")
         return
 
-    # 验证Cookie是否有效
-    print("[*] 正在验证Cookie...")
+    # Verify if Cookie is valid
+    print("[*] Verifying Cookie...")
     session.cookies.clear()
     for item in cookie.split(";"):
         item = item.strip()
@@ -124,13 +124,13 @@ def login():
         uid = data.get("uid", "")
         user = data.get("user", "")
         if uid:
-            print(f"[✓] Cookie有效! 用户: {user} (UID: {uid})")
+            print(f"[OK] Cookie is valid! User: {user} (UID: {uid})")
         else:
-            print("[!] Cookie可能无效(未获取到用户信息)，但已保存，可尝试使用")
+            print("[!] Cookie may be invalid (no user info retrieved), but saved for trial use")
     except Exception as e:
-        print(f"[!] 验证请求失败: {e}，Cookie已保存")
+        print(f"[!] Verification request failed: {e}, Cookie saved anyway")
 
-    # 保存到config
+    # Save to config
     config_path = Path(__file__).parent / "config.json"
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
@@ -140,8 +140,8 @@ def login():
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=4)
 
-    print(f"[✓] Cookie已保存到 {config_path}")
-    print("[*] 现在可以运行: python3 weibo_monitor.py")
+    print(f"[OK] Cookie saved to {config_path}")
+    print("[*] You can now run: python3 weibo_monitor.py")
 
 
 if __name__ == "__main__":

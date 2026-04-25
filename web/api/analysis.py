@@ -1,4 +1,4 @@
-"""舆情分析 API"""
+"""Sentiment Analysis API"""
 import json
 import logging
 from flask import Blueprint, jsonify, request, current_app
@@ -13,20 +13,20 @@ def summary():
     db = current_app.config["DB_PATH"]
     conn = get_connection(db)
     try:
-        # 情感分布
+        # Sentiment distribution
         sentiment = conn.execute(
-            """SELECT COALESCE(sentiment,'未分析') as label, COUNT(*) as count
+            """SELECT COALESCE(sentiment,'Not Analyzed') as label, COUNT(*) as count
                FROM posts GROUP BY sentiment ORDER BY count DESC"""
         ).fetchall()
 
-        # 各平台情感分布
+        # Sentiment distribution by platform
         platform_sentiment = conn.execute(
             """SELECT platform, sentiment, COUNT(*) as count
                FROM posts WHERE sentiment IS NOT NULL
                GROUP BY platform, sentiment"""
         ).fetchall()
 
-        # 高频关键词
+        # Top keywords
         all_keywords = []
         rows = conn.execute("SELECT keywords FROM posts WHERE keywords IS NOT NULL").fetchall()
         for row in rows:
@@ -41,7 +41,7 @@ def summary():
             keyword_freq[kw] = keyword_freq.get(kw, 0) + 1
         top_keywords = sorted(keyword_freq.items(), key=lambda x: -x[1])[:30]
 
-        # 每日趋势（最近7天）
+        # Daily trend (last 7 days)
         daily = conn.execute(
             """SELECT DATE(fetched_at) as day,
                       COUNT(*) as total,
@@ -66,7 +66,7 @@ def summary():
 
 @bp.route("/api/analysis/run", methods=["POST"])
 def run_analysis():
-    """对未分析的数据执行舆情分析"""
+    """Run sentiment analysis on unanalyzed data"""
     from analysis.sentiment import SentimentAnalyzer
     from core.config_loader import load_config
 
