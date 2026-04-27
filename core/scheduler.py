@@ -54,6 +54,8 @@ class UnifiedScheduler:
         self._lock = threading.Lock()
         self._sentiment_analyzer = None
         self._feishu_notifier = None
+        self._bitable_writer = None
+        self._last_cleanup_date = None
         self._init_jobs()
 
     def _init_jobs(self):
@@ -70,6 +72,82 @@ class UnifiedScheduler:
 
         heapq.heapify(self.jobs)
         log.info("Scheduler initialized: %d jobs", len(self.jobs))
+
+    def _cleanup_old_data(self):
+        """Layered data cleanup — runs once per day"""
+        today = datetime.now().strftime("%Y-%m-%d")
+        if self._last_cleanup_date == today:
+            return
+        self._last_cleanup_date = today
+
+        cfg = self.config.get("app", {})
+        retention = cfg.get("retention", {})
+
+        runs_days = retention.get("runs_days", 30)
+        posts_days = retention.get("posts_days", 0)
+        pushed_days = retention.get("pushed_days", 0)
+
+        # Nothing to clean if all are 0
+        if runs_days <= 0 and posts_days <= 0 and pushed_days <= 0:
+            return
+
+        conn = get_connection(self.db_path)
+        try:
+            deleted_runs = 0
+            deleted_posts = 0
+            deleted_comments = 0
+
+            # Layer 1: scheduler_runs — operational logs, short retention
+            if runs_days > 0:
+                deleted_runs = conn.execute(
+                    f"DELETE FROM scheduler_runs WHERE started_at < datetime('now', '-{runs_days} days')"
+                ).rowcount
+
+            # Layer 2: posts/comments — only if explicit retention set
+            if posts_days > 0:
+                # Find posts to delete, then delete their comments first (FK constraint)
+                old_post_ids = conn.execute(
+                    f"SELECT id FROM posts WHERE fetched_at < datetime('now', '-{posts_days} days')"
+                ).fetchall()
+                if old_post_ids:
+                    placeholders = ",".join(["?"] * len(old_post_ids))
+                    ids = [r["id"] for r in old_post_ids]
+                    deleted_comments += conn.execute(
+                        f"DELETE FROM comments WHERE post_id IN ({placeholders})", ids
+                    ).rowcount
+                    deleted_posts = conn.execute(
+                        f"DELETE FROM posts WHERE id IN ({placeholders})", ids
+                    ).rowcount
+
+            # Layer 3: pushed posts older than N days — already notified, lower value
+            if pushed_days > 0 and pushed_days != posts_days:
+                old_pushed = conn.execute(
+                    f"""SELECT id FROM posts
+                        WHERE pushed_to_feishu = 1
+                          AND fetched_at < datetime('now', '-{pushed_days} days')""",
+                ).fetchall()
+                if old_pushed:
+                    placeholders = ",".join(["?"] * len(old_pushed))
+                    ids = [r["id"] for r in old_pushed]
+                    deleted_comments += conn.execute(
+                        f"DELETE FROM comments WHERE post_id IN ({placeholders})", ids
+                    ).rowcount
+                    extra_posts = conn.execute(
+                        f"DELETE FROM posts WHERE id IN ({placeholders})", ids
+                    ).rowcount
+                    deleted_posts += extra_posts
+
+            conn.commit()
+
+            if deleted_posts or deleted_comments or deleted_runs:
+                log.info(
+                    "Data cleanup: deleted %d posts, %d comments, %d runs "
+                    "(runs>%dd, posts>%dd, pushed>%dd)",
+                    deleted_posts, deleted_comments, deleted_runs,
+                    runs_days, posts_days, pushed_days,
+                )
+        finally:
+            conn.close()
 
     def _init_analyzer(self):
         if self._sentiment_analyzer:
@@ -93,9 +171,22 @@ class UnifiedScheduler:
                 self._feishu_notifier = FeishuNotifier(
                     fcfg["webhook_url"], fcfg.get("sign_secret", "")
                 )
-                log.info("Feishu notifier loaded")
+                log.info("Feishu webhook notifier loaded")
             except ImportError as e:
                 log.warning("Failed to import Feishu notifier module: %s", e)
+
+        if not self._bitable_writer:
+            bcfg = fcfg.get("bitable", {})
+            if bcfg.get("enabled") and bcfg.get("app_id") and bcfg.get("app_secret"):
+                try:
+                    from notifiers.feishu_bitable import FeishuBitableWriter
+                    self._bitable_writer = FeishuBitableWriter(
+                        bcfg["app_id"], bcfg["app_secret"],
+                        bcfg.get("app_token", ""), bcfg.get("table_id", ""),
+                    )
+                    log.info("Feishu Bitable writer loaded")
+                except ImportError as e:
+                    log.warning("Failed to import Feishu Bitable module: %s", e)
 
     def _create_monitor(self, platform_name: str):
         MonitorClass = _load_monitor_class(platform_name)
@@ -180,25 +271,43 @@ class UnifiedScheduler:
 
     def _push_posts(self, posts: list[dict]):
         max_push = self.config.get("feishu", {}).get("max_push_per_run", 50)
-        for post in posts[:max_push]:
-            try:
-                self._feishu_notifier.push_post(post)
-            except Exception as e:
-                log.warning("Feishu push failed: %s", e)
 
-        conn = get_connection(self.db_path)
-        try:
-            import json
-            from datetime import datetime as dt
-            now = dt.now().isoformat()
+        # Webhook push
+        if self._feishu_notifier:
             for post in posts[:max_push]:
-                conn.execute(
-                    "UPDATE posts SET pushed_to_feishu=1 WHERE id=?",
-                    (post["id"],),
-                )
-            conn.commit()
-        finally:
-            conn.close()
+                try:
+                    self._feishu_notifier.push_post(post)
+                except Exception as e:
+                    log.warning("Feishu webhook push failed: %s", e)
+            conn = get_connection(self.db_path)
+            try:
+                for post in posts[:max_push]:
+                    conn.execute(
+                        "UPDATE posts SET pushed_to_feishu=1 WHERE id=?",
+                        (post["id"],),
+                    )
+                conn.commit()
+            finally:
+                conn.close()
+
+        # Bitable push
+        if self._bitable_writer:
+            try:
+                written = self._bitable_writer.push_posts(posts)
+                if written:
+                    conn = get_connection(self.db_path)
+                    try:
+                        for post in posts:
+                            conn.execute(
+                                "UPDATE posts SET pushed_to_bitable=1 WHERE id=?",
+                                (post["id"],),
+                            )
+                        conn.commit()
+                    finally:
+                        conn.close()
+                    log.info("[Bitable] Marked %d posts as pushed", written)
+            except Exception as e:
+                log.error("Feishu Bitable push failed: %s", e)
 
     def _record_start(self, platform: str) -> int:
         conn = get_connection(self.db_path)
@@ -229,6 +338,7 @@ class UnifiedScheduler:
         self._running = True
         self._init_analyzer()
         self._init_notifier()
+        self._cleanup_old_data()
         log.info("Scheduler started, %d jobs", len(self.jobs))
 
         while self._running:
@@ -282,6 +392,7 @@ class UnifiedScheduler:
         self._init_jobs()
         self._sentiment_analyzer = None
         self._feishu_notifier = None
+        self._bitable_writer = None
         self._init_analyzer()
         self._init_notifier()
 

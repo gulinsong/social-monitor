@@ -14,6 +14,98 @@
   </div>
 </div>
 
+<h5 class="mt-4">Feishu Push Config</h5>
+<div class="row mb-3">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Webhook Push</strong>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="feishu-enabled"
+                 onchange="saveFeishu()">
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="row mb-2">
+          <label class="col-sm-3 col-form-label">Webhook URL</label>
+          <div class="col-sm-9">
+            <input type="text" class="form-control form-control-sm" id="feishu-webhook-url"
+                   placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxx">
+          </div>
+        </div>
+        <div class="row mb-2">
+          <label class="col-sm-3 col-form-label">Sign Secret</label>
+          <div class="col-sm-9">
+            <input type="password" class="form-control form-control-sm" id="feishu-sign-secret"
+                   placeholder="Optional signing secret">
+          </div>
+        </div>
+        <div class="row mb-2">
+          <label class="col-sm-3 col-form-label">Max Push / Run</label>
+          <div class="col-sm-3">
+            <input type="number" class="form-control form-control-sm" id="feishu-max-push"
+                   value="50" min="1" max="200">
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-sm-12 text-end">
+            <button class="btn btn-sm btn-primary" onclick="saveFeishu()">Save Webhook</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mb-3">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Bitable (多维表格)</strong>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="bitable-enabled"
+                 onchange="saveBitable()">
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="row mb-2">
+          <label class="col-sm-3 col-form-label">App ID</label>
+          <div class="col-sm-9">
+            <input type="text" class="form-control form-control-sm" id="bitable-app-id"
+                   placeholder="Feishu app ID">
+          </div>
+        </div>
+        <div class="row mb-2">
+          <label class="col-sm-3 col-form-label">App Secret</label>
+          <div class="col-sm-9">
+            <input type="password" class="form-control form-control-sm" id="bitable-app-secret"
+                   placeholder="Feishu app secret">
+          </div>
+        </div>
+        <div class="row mb-2">
+          <label class="col-sm-3 col-form-label">App Token</label>
+          <div class="col-sm-9">
+            <input type="text" class="form-control form-control-sm" id="bitable-app-token"
+                   placeholder="From Bitable URL: /base/{app_token}">
+          </div>
+        </div>
+        <div class="row mb-2">
+          <label class="col-sm-3 col-form-label">Table ID</label>
+          <div class="col-sm-9">
+            <input type="text" class="form-control form-control-sm" id="bitable-table-id"
+                   placeholder="Data table ID">
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-sm-12 text-end">
+            <button class="btn btn-sm btn-primary" onclick="saveBitable()">Save Bitable</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const PLATFORM_NAMES = {weibo:'Weibo', wechat:'WeChat', maimai:'Maimai', xiaohongshu:'Xiaohongshu'};
 
@@ -73,6 +165,21 @@ async function loadConfig() {
     const kwResp = await fetch('/api/config/keywords');
     const kwData = await kwResp.json();
     document.getElementById('global-keywords').value = kwData.keywords.join(',');
+
+    // Load feishu config
+    const fsResp = await fetch('/api/config/feishu');
+    const fsData = await fsResp.json();
+    document.getElementById('feishu-enabled').checked = !!fsData.enabled;
+    document.getElementById('feishu-webhook-url').value = fsData.webhook_url || '';
+    document.getElementById('feishu-sign-secret').value = '';
+    document.getElementById('feishu-max-push').value = fsData.max_push_per_run || 50;
+
+    const bitable = fsData.bitable || {};
+    document.getElementById('bitable-enabled').checked = !!bitable.enabled;
+    document.getElementById('bitable-app-id').value = bitable.app_id || '';
+    document.getElementById('bitable-app-secret').value = '';
+    document.getElementById('bitable-app-token').value = bitable.app_token || '';
+    document.getElementById('bitable-table-id').value = bitable.table_id || '';
 }
 
 async function togglePlatform(name, enabled) {
@@ -111,6 +218,41 @@ async function saveGlobalKeywords() {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({keywords})
+    });
+    alert('Saved');
+}
+
+async function saveFeishu() {
+    const data = {
+        enabled: document.getElementById('feishu-enabled').checked,
+        webhook_url: document.getElementById('feishu-webhook-url').value,
+        max_push_per_run: parseInt(document.getElementById('feishu-max-push').value) || 50,
+    };
+    const secret = document.getElementById('feishu-sign-secret').value;
+    if (secret) data.sign_secret = secret;
+    await fetch('/api/config/feishu', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    });
+    alert('Saved');
+}
+
+async function saveBitable() {
+    const data = {
+        bitable: {
+            enabled: document.getElementById('bitable-enabled').checked,
+            app_id: document.getElementById('bitable-app-id').value,
+            app_token: document.getElementById('bitable-app-token').value,
+            table_id: document.getElementById('bitable-table-id').value,
+        }
+    };
+    const secret = document.getElementById('bitable-app-secret').value;
+    if (secret) data.bitable.app_secret = secret;
+    await fetch('/api/config/feishu', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
     });
     alert('Saved');
 }
