@@ -4,6 +4,8 @@ Flask Web Application
 
 import functools
 import logging
+import time
+from collections import defaultdict
 from datetime import datetime
 
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
@@ -12,6 +14,27 @@ from core.config_loader import load_config, save_config, get_platform_config
 from db.schema import get_connection
 
 log = logging.getLogger(__name__)
+
+
+class InMemoryRateLimiter:
+    """Simple sliding-window rate limiter per IP"""
+
+    def __init__(self, max_requests: int = 60, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._hits: dict[str, list[float]] = defaultdict(list)
+
+    def is_allowed(self, key: str) -> bool:
+        now = time.time()
+        cutoff = now - self.window_seconds
+        hits = self._hits[key]
+        # prune old hits
+        while hits and hits[0] < cutoff:
+            hits.pop(0)
+        if len(hits) >= self.max_requests:
+            return False
+        hits.append(now)
+        return True
 
 
 def create_app(config: dict = None) -> Flask:
@@ -29,6 +52,8 @@ def create_app(config: dict = None) -> Flask:
     app.config["DB_PATH"] = cfg.get("app", {}).get("db_path", "db/monitor.db")
     app.scheduler = None
 
+    _api_limiter = InMemoryRateLimiter(max_requests=60, window_seconds=60)
+
     # Register blueprints
     from web.api.dashboard import bp as dashboard_bp
     from web.api.auth import bp as auth_bp
@@ -42,10 +67,27 @@ def create_app(config: dict = None) -> Flask:
     app.register_blueprint(analysis_bp)
     app.register_blueprint(config_bp)
 
-    # Login verification
+    @app.route("/health")
+    def health():
+        db_ok = False
+        try:
+            conn = get_connection(app.config["DB_PATH"])
+            conn.execute("SELECT 1")
+            conn.close()
+            db_ok = True
+        except Exception:
+            pass
+        return jsonify({"status": "ok" if db_ok else "degraded", "db": db_ok}), 200 if db_ok else 503
+
+    # Login verification + rate limiting
     @app.before_request
     def check_login():
-        if request.endpoint in ("login_page", "login_submit", "static"):
+        # Rate limit API endpoints
+        if request.path.startswith("/api/"):
+            client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+            if not _api_limiter.is_allowed(client_ip):
+                return jsonify({"error": "Too many requests"}), 429
+        if request.endpoint in ("login_page", "login_submit", "static", "health"):
             return None
         if not session.get("logged_in"):
             password = cfg.get("app", {}).get("password", "")

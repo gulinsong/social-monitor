@@ -124,8 +124,8 @@ class MaimaiQRLogin:
                             f"{c['name']}={c['value']}" for c in cookies
                         )
                         log.info("[MM] Login successful, cookies obtained")
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("[MM] Response handler error for %s: %s", url[:80], exc)
 
         self.page.on("response", lambda r: asyncio.ensure_future(on_response(r)))
 
@@ -183,8 +183,8 @@ class MaimaiQRLogin:
                     log.info("[MM] Page redirected, cookies extracted successfully")
                     await self._cleanup()
                     return {"status": "success", "cookies": cookie_str}
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("[MM] Cookie extraction after redirect: %s", exc)
 
         # 3. Wait for the next JS poll cycle
         await asyncio.sleep(3)
@@ -203,8 +203,8 @@ class MaimaiQRLogin:
                     cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies)
                     await self._cleanup()
                     return {"status": "success", "cookies": cookie_str}
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("[MM] Second cookie extraction attempt: %s", exc)
 
         # 4. Status code check
         if self._last_rcode == -11060004:
@@ -222,8 +222,8 @@ class MaimaiQRLogin:
                 await self.browser.close()
             if self._pw:
                 await self._pw.stop()
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("[MM] Cleanup error: %s", exc)
         self.browser = None
         self.context = None
         self.page = None

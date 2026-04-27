@@ -88,8 +88,8 @@ class XhsQRLogin:
             if self._loop and self._loop.is_running():
                 self._submit(self._cleanup())
                 self._loop.call_soon_threadsafe(self._loop.stop)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("[XHS] Close cleanup error: %s", exc)
 
     async def _get_qrcode_async(self) -> dict:
         await self._init_browser()
@@ -120,15 +120,15 @@ class XhsQRLogin:
                             await self.page.wait_for_url(
                                 lambda url: "login" not in url, timeout=10000
                             )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            log.debug("[XHS] Wait for redirect after login: %s", exc)
                         await self.page.wait_for_timeout(2000)
                         cookies = await self.context.cookies()
                         self._logged_in_cookies = "; ".join(
                             f"{c['name']}={c['value']}" for c in cookies
                         )
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("[XHS] Response handler error for %s: %s", url[:80], exc)
 
         self.page.on("response", lambda r: asyncio.ensure_future(on_response(r)))
 
@@ -198,8 +198,8 @@ class XhsQRLogin:
                 await self.browser.close()
             if hasattr(self, "_pw") and self._pw:
                 await self._pw.stop()
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("[XHS] Cleanup error: %s", exc)
         self.browser = None
         self.context = None
         self.page = None

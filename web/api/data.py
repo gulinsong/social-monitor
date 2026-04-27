@@ -47,12 +47,12 @@ def list_posts():
                 try:
                     p["extra"] = json.loads(p["extra"])
                 except (json.JSONDecodeError, TypeError):
-                    pass
+                    pass  # extra/keywords may be plain text, keep as-is
             if p.get("keywords"):
                 try:
                     p["keywords"] = json.loads(p["keywords"])
                 except (json.JSONDecodeError, TypeError):
-                    pass
+                    pass  # extra/keywords may be plain text, keep as-is
             posts.append(p)
 
         return jsonify({
@@ -106,7 +106,24 @@ def export_data():
                 writer.writerow([row["id"], row["platform"], row["keyword"], row["user_name"], row["title"], row["content"], row["url"], row["created_at"], row["sentiment"], row["sentiment_score"]])
             return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=posts.csv"})
 
-        posts = [dict(r) for r in rows]
-        return jsonify({"posts": posts})
+        posts = []
+        for row in rows:
+            p = dict(row)
+            if p.get("extra"):
+                try:
+                    p["extra"] = json.loads(p["extra"])
+                except (json.JSONDecodeError, TypeError):
+                    pass  # extra/keywords may be plain text, keep as-is
+            if p.get("keywords"):
+                try:
+                    p["keywords"] = json.loads(p["keywords"])
+                except (json.JSONDecodeError, TypeError):
+                    pass  # extra/keywords may be plain text, keep as-is
+            posts.append(p)
+        return Response(
+            json.dumps({"posts": posts}, ensure_ascii=False, indent=2),
+            mimetype="application/json",
+            headers={"Content-Disposition": "attachment; filename=posts.json"},
+        )
     finally:
         conn.close()

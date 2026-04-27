@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS posts (
     keywords TEXT,
     llm_analysis TEXT,
     extra TEXT,
-    pushed_to_feishu INTEGER NOT NULL DEFAULT 0
+    pushed_to_feishu INTEGER NOT NULL DEFAULT 0,
+    pushed_to_bitable INTEGER NOT NULL DEFAULT 0
 );
 """
 
@@ -80,6 +81,11 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_sched_started ON scheduler_runs(started_at);",
 ]
 
+# Backward-compatible column additions for existing databases
+_MIGRATIONS = [
+    "ALTER TABLE posts ADD COLUMN pushed_to_bitable INTEGER NOT NULL DEFAULT 0",
+]
+
 
 def get_connection(db_path: str | Path = None) -> sqlite3.Connection:
     path = Path(db_path) if db_path else DB_PATH
@@ -100,6 +106,11 @@ def init_db(db_path: str | Path = None):
         conn.executescript(SCHEMA_PLATFORM_AUTH)
         for idx in INDEXES:
             conn.execute(idx)
+        for sql in _MIGRATIONS:
+            try:
+                conn.execute(sql)
+            except Exception:
+                pass  # Column already exists
         conn.commit()
     finally:
         conn.close()

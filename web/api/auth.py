@@ -325,8 +325,8 @@ def _cleanup_login_session(platform: str, key: str):
         if entry and hasattr(entry["obj"], "close"):
             try:
                 entry["obj"].close()
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Login session cleanup error: %s", exc)
 
 
 def _cleanup_entry(k: str, entry: dict):
@@ -334,8 +334,8 @@ def _cleanup_entry(k: str, entry: dict):
     if hasattr(entry["obj"], "close"):
         try:
             entry["obj"].close()
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Login entry cleanup error: %s", exc)
 
 
 def _cleanup_expired_sessions():

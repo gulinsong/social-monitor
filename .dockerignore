@@ -1,0 +1,11 @@
+*.db
+*.token
+logs/
+__pycache__/
+*.pyc
+.git/
+.venv/
+venv/
+legacy/
+*.png
+*.jpg

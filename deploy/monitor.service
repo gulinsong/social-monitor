@@ -1,0 +1,16 @@
+[Unit]
+Description=Social Media Monitoring System
+After=network.target
+
+[Service]
+Type=simple
+User=monitor
+Group=monitor
+WorkingDirectory=/opt/monitor
+ExecStart=/opt/monitor/venv/bin/python3 main.py
+Restart=on-failure
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

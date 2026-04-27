@@ -162,8 +162,8 @@ class Monitor(BaseMonitor):
                         remain = data.get("remain", 0)
                         log.info("[Maimai] Colleague circle intercepted %d items (%d remaining), url=%s",
                                  len(items), remain, url[:100])
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log.debug("[Maimai] Feed response parse error for %s: %s", url[:80], exc)
 
             page.on("response", lambda r: asyncio.ensure_future(on_response(r)))
 
@@ -317,8 +317,8 @@ class Monitor(BaseMonitor):
                     if items:
                         api_results.extend(items)
                         log.info("[Maimai] Search intercepted %d items, url=%s", len(items), url[:120])
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log.debug("[Maimai] Search response parse error for %s: %s", url[:80], exc)
 
             page.on("response", lambda r: asyncio.ensure_future(on_response(r)))
 

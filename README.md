@@ -178,3 +178,41 @@ monitor/
 - jieba, snownlp
 - qrcode
 - playwright (for Weibo, Maimai, XHS crawling and QR login)
+
+## Deployment
+
+### Docker (Recommended)
+
+```bash
+docker compose up -d
+```
+
+The container exposes port 5000. Mount your `config.yaml` as a volume.
+
+### systemd
+
+```bash
+# Copy service file
+sudo cp deploy/monitor.service /etc/systemd/system/
+
+# Edit paths and user as needed
+sudo nano /etc/systemd/system/monitor.service
+
+# Enable and start
+sudo systemctl daemon-reload
+sudo systemctl enable monitor
+sudo systemctl start monitor
+
+# View logs
+sudo journalctl -u monitor -f
+```
+
+### Health Check
+
+The `/health` endpoint returns database status for monitoring:
+
+```bash
+curl http://localhost:5000/health
+# {"status":"ok","db":true}
+```
+

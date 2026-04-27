@@ -5,6 +5,7 @@ Social Media Monitoring System - Entry Point
 
 import argparse
 import logging
+import logging.handlers
 import os
 import signal
 import sys
@@ -20,11 +21,17 @@ from db.schema import init_db
 
 def setup_logging(log_dir: str):
     Path(log_dir).mkdir(parents=True, exist_ok=True)
+    file_handler = logging.handlers.RotatingFileHandler(
+        Path(log_dir) / "monitor.log",
+        maxBytes=10 * 1024 * 1024,  # 10 MB
+        backupCount=5,
+        encoding="utf-8",
+    )
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         handlers=[
-            logging.FileHandler(Path(log_dir) / "monitor.log", encoding="utf-8"),
+            file_handler,
             logging.StreamHandler(),
         ],
     )

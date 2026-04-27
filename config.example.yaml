@@ -6,6 +6,11 @@ app:
   db_path: "db/monitor.db"
   log_dir: "logs"
   password: "admin123"
+  retention_days: 90   # Legacy: simple N-day cutoff (overridden by retention below)
+  retention:            # Layered data cleanup policy
+    runs_days: 30       # Delete scheduler execution logs after N days
+    posts_days: 0       # Delete posts/comments after N days (0 = keep forever)
+    pushed_days: 0      # Delete pushed-to-Feishu posts after N days (0 = keep forever)
 
 default_keywords: ["your-keyword"]
 
@@ -16,6 +21,12 @@ feishu:
   push_new_posts: true
   push_new_comments: false
   max_push_per_run: 50
+  bitable:
+    enabled: false
+    app_id: ""
+    app_secret: ""
+    app_token: ""       # From Bitable URL: /base/{app_token}
+    table_id: ""        # Data table ID within the Bitable
 
 sentiment:
   snowNLP: true
@@ -61,6 +72,7 @@ platforms:
     interval_hours: 8
     keywords: ["your-keyword"]
     cookies: ""
+    source: "colleague_circle"   # colleague_circle / search / both
     request_delay:
       min: 15.0
       max: 30.0

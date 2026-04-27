@@ -34,7 +34,7 @@ def summary():
                 kws = json.loads(row["keywords"])
                 all_keywords.extend(kws)
             except (json.JSONDecodeError, TypeError):
-                pass
+                continue  # skip malformed keywords
 
         keyword_freq = {}
         for kw in all_keywords:
