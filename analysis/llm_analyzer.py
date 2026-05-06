@@ -5,21 +5,25 @@ import requests
 
 log = logging.getLogger(__name__)
 
-DEFAULT_PROMPT = """You are a sentiment analysis expert. Analyze the following social media text and return the result in JSON format:
+DEFAULT_PROMPT = """你是一位社交媒体情感分析专家。分析以下文本并返回JSON格式的结果：
 
-Text: {text}
+文本：{text}
 
-Please return:
+请返回：
 {{
   "sentiment": "positive/negative/neutral",
-  "score": a value between 0.0 and 1.0,
-  "sarcastic": true/false (whether it contains sarcasm),
-  "topics": ["topic1", "topic2"],
-  "summary": "a one-sentence summary",
-  "risk_level": "low/medium/high"
+  "score": 0.0到1.0之间的数值,
+  "sarcastic": true/false（是否包含反讽），
+  "topics": ["主题1", "主题2"],
+  "tags": ["#标签1", "#标签2"],
+  "summary": "一句话摘要",
+  "risk_level": "low/medium/high",
+  "risk_reason": "风险原因（如有）"
 }}
 
-Return only JSON, no other content."""
+只返回JSON，不要其他内容。"""
+
+MAX_INPUT_LENGTH = 2000
 
 
 class LLMAnalyzer:
@@ -32,6 +36,10 @@ class LLMAnalyzer:
     def analyze(self, text: str) -> dict | None:
         if not self.enabled:
             return None
+
+        # Truncate long text to save tokens
+        if len(text) > MAX_INPUT_LENGTH:
+            text = text[:MAX_INPUT_LENGTH] + "..."
 
         try:
             resp = requests.post(
@@ -48,7 +56,7 @@ class LLMAnalyzer:
                     "temperature": 0.1,
                     "max_tokens": 500,
                 },
-                timeout=30,
+                timeout=15,
             )
             resp.raise_for_status()
             content = resp.json()["choices"][0]["message"]["content"]
@@ -58,6 +66,9 @@ class LLMAnalyzer:
             elif "```" in content:
                 content = content.split("```")[1].split("```")[0]
             return json.loads(content.strip())
+        except requests.Timeout:
+            log.warning("LLM analysis timed out")
+            return None
         except Exception as e:
             log.error("LLM analysis failed: %s", e)
             return None

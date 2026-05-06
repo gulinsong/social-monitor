@@ -14,7 +14,7 @@
 <div class="row mb-4">
   <div class="col-md-4">
     <div class="card"><div class="card-body">
-      <canvas id="sentiment-chart" height="200"></canvas>
+      <div id="sentiment-chart"></div>
     </div></div>
   </div>
   <div class="col-md-8">
@@ -22,6 +22,13 @@
       <h6>各平台情感</h6>
       <div id="platform-sentiment"></div>
     </div></div>
+  </div>
+</div>
+
+<h5>热门标签</h5>
+<div class="row mb-4">
+  <div class="col-md-12">
+    <div id="tags-cloud" class="d-flex flex-wrap gap-2"></div>
   </div>
 </div>
 
@@ -42,31 +49,43 @@
   </div>
 </div>
 
+<h5 class="text-danger">高风险内容</h5>
+<div class="row mb-4">
+  <div class="col-md-12">
+    <table class="table table-sm table-hover">
+      <thead><tr><th>平台</th><th>内容摘要</th><th>风险</th><th>情感</th><th>标签</th><th>时间</th></tr></thead>
+      <tbody id="high-risk-list"></tbody>
+    </table>
+  </div>
+</div>
+
 <script>
 function escHtml(s) {
     if (s == null) return '';
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+const sentimentLabels = {positive:'正面', negative:'负面', neutral:'中性', 'Not Analyzed':'未分析'};
+const platformLabels = {weibo:'微博', wechat:'微信', maimai:'脉脉', xiaohongshu:'小红书'};
+const riskColors = {high:'danger', medium:'warning', low:'secondary'};
+
 async function loadAnalysis() {
     const resp = await fetch('/api/analysis/summary');
     const data = await resp.json();
 
     // Sentiment distribution
-    const sc = document.getElementById('sentiment-chart').getContext('2d');
+    const sc = document.getElementById('sentiment-chart');
     const sentColors = {positive:'#28a745', negative:'#dc3545', neutral:'#6c757d', 'Not Analyzed':'#adb5bd'};
     const total = data.sentiment_distribution.reduce((a,b) => a + b.count, 0);
-    document.getElementById('sentiment-chart').replaceWith(
-        ...data.sentiment_distribution.map(s => {
-            const pct = total > 0 ? (s.count/total*100).toFixed(1) : 0;
-            return Object.assign(document.createElement('div'), {
-                className: 'mb-2',
-                innerHTML: `<span class="badge" style="background:${sentColors[s.label]||'#6c757d'}">${escHtml(s.label)}</span>
-                    <span class="ms-2">${s.count} 条记录 (${pct}%)</span>
-                    <div class="progress mt-1" style="height:6px"><div class="progress-bar" style="width:${pct}%;background:${sentColors[s.label]||'#6c757d'}"></div></div>`
-            });
-        })
-    );
+    sc.innerHTML = data.sentiment_distribution.map(s => {
+        const pct = total > 0 ? (s.count/total*100).toFixed(1) : 0;
+        const label = sentimentLabels[s.label] || s.label;
+        return `<div class="mb-2">
+            <span class="badge" style="background:${sentColors[s.label]||'#6c757d'}">${escHtml(label)}</span>
+            <span class="ms-2">${s.count} 条 (${pct}%)</span>
+            <div class="progress mt-1" style="height:6px"><div class="progress-bar" style="width:${pct}%;background:${sentColors[s.label]||'#6c757d'}"></div></div>
+        </div>`;
+    }).join('');
 
     // Sentiment by platform
     const ps = document.getElementById('platform-sentiment');
@@ -77,7 +96,7 @@ async function loadAnalysis() {
             const pos = rows.find(r => r.sentiment==='positive')?.count || 0;
             const neg = rows.find(r => r.sentiment==='negative')?.count || 0;
             const neu = rows.find(r => r.sentiment==='neutral')?.count || 0;
-            return `<tr><td>${escHtml(plat)}</td><td class="text-success">${pos}</td><td class="text-danger">${neg}</td><td class="text-secondary">${neu}</td></tr>`;
+            return `<tr><td>${escHtml(platformLabels[plat] || plat)}</td><td class="text-success">${pos}</td><td class="text-danger">${neg}</td><td class="text-secondary">${neu}</td></tr>`;
         }).join('') + '</tbody></table>';
 
     // Keywords
@@ -88,11 +107,45 @@ async function loadAnalysis() {
         return `<span class="badge bg-light text-dark" style="font-size:${size}px">${escHtml(k.word)} <small>(${k.count})</small></span>`;
     }).join('');
 
+    // Tags cloud (from extra JSON)
+    const tagResp = await fetch('/api/analysis/tags');
+    const tagData = await tagResp.json();
+    const tagsEl = document.getElementById('tags-cloud');
+    const maxTag = tagData.tags.length > 0 ? tagData.tags[0].count : 1;
+    tagsEl.innerHTML = tagData.tags.map(t => {
+        const size = Math.max(12, Math.round(t.count / maxTag * 26));
+        const color = t.count > maxTag * 0.5 ? 'bg-primary' : 'bg-info';
+        return `<span class="badge ${color}" style="font-size:${size}px">${escHtml(t.tag)} <small>(${t.count})</small></span>`;
+    }).join('') || '<span class="text-muted">暂无标签数据</span>';
+
     // Daily trend
     const dt = document.getElementById('daily-trend');
     dt.innerHTML = data.daily_trend.map(d =>
         `<tr><td>${escHtml(d.day)}</td><td>${d.total}</td><td class="text-success">${d.positive}</td><td class="text-danger">${d.negative}</td><td class="text-secondary">${d.neutral}</td></tr>`
     ).join('') || '<tr><td colspan="5" class="text-muted">暂无数据</td></tr>';
+
+    // High-risk list
+    const riskResp = await fetch('/api/analysis/high-risk');
+    const riskData = await riskResp.json();
+    const riskEl = document.getElementById('high-risk-list');
+    riskEl.innerHTML = riskData.posts.map(p => {
+        const extra = p.extra && typeof p.extra === 'string' ? JSON.parse(p.extra) : (p.extra || {});
+        const tags = (extra.tags || []).map(t => `<span class="badge bg-warning text-dark">${escHtml(t)}</span>`).join(' ');
+        const riskBadge = `<span class="badge bg-${riskColors[p.risk_level]||'secondary'}">${escHtml(p.risk_level)}</span>`;
+        const sentBadge = `<span class="badge bg-${sentimentColors(p.sentiment)}">${escHtml(sentimentLabels[p.sentiment]||p.sentiment)}</span>`;
+        return `<tr>
+            <td>${escHtml(platformLabels[p.platform]||p.platform)}</td>
+            <td class="text-truncate" style="max-width:400px">${escHtml(p.content.substring(0,100))}</td>
+            <td>${riskBadge}</td>
+            <td>${sentBadge}</td>
+            <td>${tags}</td>
+            <td class="text-muted">${escHtml(p.created_at)}</td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="6" class="text-muted">暂无高风险内容</td></tr>';
+}
+
+function sentimentColors(s) {
+    return {positive:'success',negative:'danger',neutral:'secondary'}[s]||'secondary';
 }
 
 async function runAnalysis() {

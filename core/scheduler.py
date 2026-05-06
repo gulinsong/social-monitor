@@ -53,6 +53,7 @@ class UnifiedScheduler:
         self._running = False
         self._lock = threading.Lock()
         self._sentiment_analyzer = None
+        self._llm_analyzer = None
         self._feishu_notifier = None
         self._bitable_writer = None
         self._last_cleanup_date = None
@@ -150,16 +151,24 @@ class UnifiedScheduler:
             conn.close()
 
     def _init_analyzer(self):
-        if self._sentiment_analyzer:
-            return
         cfg = self.config.get("sentiment", {})
-        if cfg.get("snowNLP", True):
+        if not self._sentiment_analyzer and cfg.get("snowNLP", True):
             try:
                 from analysis.sentiment import SentimentAnalyzer
                 self._sentiment_analyzer = SentimentAnalyzer(cfg.get("custom_dict"))
                 log.info("Sentiment analyzer loaded")
             except ImportError as e:
                 log.warning("Failed to import sentiment analysis module: %s", e)
+
+        if not self._llm_analyzer:
+            llm_cfg = cfg.get("llm", {})
+            if llm_cfg.get("enabled") and llm_cfg.get("api_url") and llm_cfg.get("api_key"):
+                try:
+                    from analysis.llm_analyzer import LLMAnalyzer
+                    self._llm_analyzer = LLMAnalyzer(llm_cfg)
+                    log.info("LLM analyzer loaded")
+                except ImportError as e:
+                    log.warning("Failed to import LLM analyzer: %s", e)
 
     def _init_notifier(self):
         if self._feishu_notifier:
@@ -245,6 +254,7 @@ class UnifiedScheduler:
             self._record_finish(run_id, "error", error=str(e))
 
     def _analyze_posts(self, posts: list[dict]):
+        # Step 1: SnowNLP full analysis + tags/summary/risk
         for post in posts:
             text = f"{post.get('title', '')} {post.get('content', '')}"
             if not text.strip():
@@ -253,18 +263,62 @@ class UnifiedScheduler:
             post["sentiment"] = result["sentiment"]
             post["sentiment_score"] = result["score"]
             post["keywords"] = result["keywords"]
+            post["tags"] = self._sentiment_analyzer.extract_tags(text)
+            post["summary"] = self._sentiment_analyzer.generate_summary(text)
+            post["risk_level"] = self._sentiment_analyzer.assess_risk(text, result["score"])
 
+        # Step 2: LLM deep analysis for high-risk content
+        if self._llm_analyzer:
+            high_risk = [p for p in posts if p.get("risk_level") in ("medium", "high")]
+            if high_risk:
+                log.info("[Analysis] %d high-risk posts, triggering LLM analysis", len(high_risk))
+            for post in high_risk:
+                text = f"{post.get('title', '')} {post.get('content', '')}"
+                if not text.strip():
+                    continue
+                llm_result = self._llm_analyzer.analyze(text)
+                if llm_result:
+                    post["llm_analysis"] = llm_result
+                    if llm_result.get("sentiment"):
+                        post["sentiment"] = llm_result["sentiment"]
+                    if llm_result.get("score") is not None:
+                        post["sentiment_score"] = llm_result["score"]
+                    if llm_result.get("risk_level"):
+                        post["risk_level"] = llm_result["risk_level"]
+                    if llm_result.get("tags"):
+                        post["tags"] = list(set(post.get("tags", []) + llm_result["tags"]))
+
+        # Save to DB
         conn = get_connection(self.db_path)
         try:
+            import json as _json
             for post in posts:
-                if "sentiment" in post:
-                    import json
-                    conn.execute(
-                        """UPDATE posts SET sentiment=?, sentiment_score=?, keywords=?
-                           WHERE id=?""",
-                        (post["sentiment"], post["sentiment_score"],
-                         json.dumps(post["keywords"], ensure_ascii=False), post["id"]),
-                    )
+                if "sentiment" not in post:
+                    continue
+                # Build extra JSON with tags/summary/risk
+                extra = {}
+                if post.get("extra"):
+                    try:
+                        extra = _json.loads(post["extra"]) if isinstance(post["extra"], str) else post["extra"]
+                    except (ValueError, TypeError):
+                        extra = {}
+                if post.get("tags"):
+                    extra["tags"] = post["tags"]
+                if post.get("summary"):
+                    extra["summary"] = post["summary"]
+                if post.get("risk_level"):
+                    extra["risk_level"] = post["risk_level"]
+
+                llm_json = _json.dumps(post["llm_analysis"], ensure_ascii=False) if post.get("llm_analysis") else None
+
+                conn.execute(
+                    """UPDATE posts SET sentiment=?, sentiment_score=?, keywords=?,
+                       extra=?, llm_analysis=? WHERE id=?""",
+                    (post["sentiment"], post["sentiment_score"],
+                     _json.dumps(post["keywords"], ensure_ascii=False),
+                     _json.dumps(extra, ensure_ascii=False),
+                     llm_json, post["id"]),
+                )
             conn.commit()
         finally:
             conn.close()
@@ -391,6 +445,7 @@ class UnifiedScheduler:
             self.jobs.clear()
         self._init_jobs()
         self._sentiment_analyzer = None
+        self._llm_analyzer = None
         self._feishu_notifier = None
         self._bitable_writer = None
         self._init_analyzer()
