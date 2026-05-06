@@ -1,25 +1,25 @@
 {% extends "base.html" %}
-{% block title %}Schedule Config{% endblock %}
+{% block title %}调度配置{% endblock %}
 {% block content %}
-<h4>Schedule Config</h4>
+<h4>调度配置</h4>
 <div id="config-cards"></div>
 
-<h5 class="mt-4">Global Keywords</h5>
+<h5 class="mt-4">全局关键词</h5>
 <div class="row mb-3">
   <div class="col-md-6">
     <div class="input-group">
-      <input type="text" id="global-keywords" class="form-control" placeholder="Keywords, comma separated">
-      <button class="btn btn-primary" onclick="saveGlobalKeywords()">Save</button>
+      <input type="text" id="global-keywords" class="form-control" placeholder="关键词，用逗号分隔">
+      <button class="btn btn-primary" onclick="saveGlobalKeywords()">保存</button>
     </div>
   </div>
 </div>
 
-<h5 class="mt-4">Feishu Push Config</h5>
+<h5 class="mt-4">飞书推送配置</h5>
 <div class="row mb-3">
   <div class="col-md-8">
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center">
-        <strong>Webhook Push</strong>
+        <strong>Webhook推送</strong>
         <div class="form-check form-switch">
           <input class="form-check-input" type="checkbox" id="feishu-enabled"
                  onchange="saveFeishu()">
@@ -34,14 +34,14 @@
           </div>
         </div>
         <div class="row mb-2">
-          <label class="col-sm-3 col-form-label">Sign Secret</label>
+          <label class="col-sm-3 col-form-label">签名密钥</label>
           <div class="col-sm-9">
             <input type="password" class="form-control form-control-sm" id="feishu-sign-secret"
-                   placeholder="Optional signing secret">
+                   placeholder="可选签名密钥">
           </div>
         </div>
         <div class="row mb-2">
-          <label class="col-sm-3 col-form-label">Max Push / Run</label>
+          <label class="col-sm-3 col-form-label">每次最大推送数</label>
           <div class="col-sm-3">
             <input type="number" class="form-control form-control-sm" id="feishu-max-push"
                    value="50" min="1" max="200">
@@ -49,7 +49,7 @@
         </div>
         <div class="row">
           <div class="col-sm-12 text-end">
-            <button class="btn btn-sm btn-primary" onclick="saveFeishu()">Save Webhook</button>
+            <button class="btn btn-sm btn-primary" onclick="saveFeishu()">保存Webhook</button>
           </div>
         </div>
       </div>
@@ -72,33 +72,33 @@
           <label class="col-sm-3 col-form-label">App ID</label>
           <div class="col-sm-9">
             <input type="text" class="form-control form-control-sm" id="bitable-app-id"
-                   placeholder="Feishu app ID">
+                   placeholder="飞书应用ID">
           </div>
         </div>
         <div class="row mb-2">
-          <label class="col-sm-3 col-form-label">App Secret</label>
+          <label class="col-sm-3 col-form-label">应用密钥</label>
           <div class="col-sm-9">
             <input type="password" class="form-control form-control-sm" id="bitable-app-secret"
-                   placeholder="Feishu app secret">
+                   placeholder="飞书应用密钥">
           </div>
         </div>
         <div class="row mb-2">
           <label class="col-sm-3 col-form-label">App Token</label>
           <div class="col-sm-9">
             <input type="text" class="form-control form-control-sm" id="bitable-app-token"
-                   placeholder="From Bitable URL: /base/{app_token}">
+                   placeholder="从多维表格URL获取: /base/{app_token}">
           </div>
         </div>
         <div class="row mb-2">
           <label class="col-sm-3 col-form-label">Table ID</label>
           <div class="col-sm-9">
             <input type="text" class="form-control form-control-sm" id="bitable-table-id"
-                   placeholder="Data table ID">
+                   placeholder="数据表ID">
           </div>
         </div>
         <div class="row">
           <div class="col-sm-12 text-end">
-            <button class="btn btn-sm btn-primary" onclick="saveBitable()">Save Bitable</button>
+            <button class="btn btn-sm btn-primary" onclick="saveBitable()">保存多维表格配置</button>
           </div>
         </div>
       </div>
@@ -107,7 +107,7 @@
 </div>
 
 <script>
-const PLATFORM_NAMES = {weibo:'Weibo', wechat:'WeChat', maimai:'Maimai', xiaohongshu:'Xiaohongshu'};
+const PLATFORM_NAMES = {weibo:'微博', wechat:'微信', maimai:'脉脉', xiaohongshu:'小红书'};
 
 async function loadConfig() {
     const resp = await fetch('/api/config/platforms');
@@ -125,24 +125,24 @@ async function loadConfig() {
         </div>
         <div class="card-body">
           <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">Crawl Interval (hours)</label>
+            <label class="col-sm-4 col-form-label">抓取间隔 (小时)</label>
             <div class="col-sm-4">
               <input type="number" class="form-control form-control-sm" id="interval-${name}"
                      value="${cfg.interval_hours}" min="1" max="48">
             </div>
             <div class="col-sm-4">
-              <button class="btn btn-sm btn-outline-primary" onclick="saveInterval('${name}')">Save</button>
+              <button class="btn btn-sm btn-outline-primary" onclick="saveInterval('${name}')">保存</button>
             </div>
           </div>
           <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">Keywords</label>
+            <label class="col-sm-4 col-form-label">关键词</label>
             <div class="col-sm-8">
               <input type="text" class="form-control form-control-sm" id="keywords-${name}"
                      value="${cfg.keywords.join(',')}">
             </div>
           </div>
           <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">Rate Limit Range (seconds)</label>
+            <label class="col-sm-4 col-form-label">请求延迟范围 (秒)</label>
             <div class="col-sm-4">
               <input type="number" class="form-control form-control-sm" id="delay-min-${name}"
                      value="${cfg.request_delay.min}" step="0.5" min="1">
@@ -154,7 +154,7 @@ async function loadConfig() {
           </div>
           <div class="row">
             <div class="col-sm-12 text-end">
-              <button class="btn btn-sm btn-primary" onclick="savePlatform('${name}')">Save All</button>
+              <button class="btn btn-sm btn-primary" onclick="savePlatform('${name}')">全部保存</button>
             </div>
           </div>
         </div>
@@ -197,7 +197,7 @@ async function saveInterval(name) {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({interval_hours: interval})
     });
-    alert('Saved');
+    alert('已保存');
 }
 
 async function savePlatform(name) {
@@ -209,7 +209,7 @@ async function savePlatform(name) {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({keywords, request_delay: {min, max}})
     });
-    alert('Saved');
+    alert('已保存');
 }
 
 async function saveGlobalKeywords() {
@@ -219,7 +219,7 @@ async function saveGlobalKeywords() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({keywords})
     });
-    alert('Saved');
+    alert('已保存');
 }
 
 async function saveFeishu() {
@@ -235,7 +235,7 @@ async function saveFeishu() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(data)
     });
-    alert('Saved');
+    alert('已保存');
 }
 
 async function saveBitable() {
@@ -254,7 +254,7 @@ async function saveBitable() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(data)
     });
-    alert('Saved');
+    alert('已保存');
 }
 
 loadConfig();

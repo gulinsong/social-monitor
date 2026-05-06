@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Sentiment Analysis{% endblock %}
+{% block title %}情感分析{% endblock %}
 {% block content %}
-<h4>Sentiment Analysis</h4>
+<h4>情感分析</h4>
 
 <div class="row mb-4">
   <div class="col-md-12">
-    <button class="btn btn-primary" onclick="runAnalysis()">Analyze Unanalyzed Data</button>
+    <button class="btn btn-primary" onclick="runAnalysis()">分析未处理数据</button>
     <span id="analysis-result" class="ms-2 text-muted"></span>
   </div>
 </div>
 
-<h5>Sentiment Distribution</h5>
+<h5>情感分布</h5>
 <div class="row mb-4">
   <div class="col-md-4">
     <div class="card"><div class="card-body">
@@ -19,24 +19,24 @@
   </div>
   <div class="col-md-8">
     <div class="card"><div class="card-body">
-      <h6>Sentiment by Platform</h6>
+      <h6>各平台情感</h6>
       <div id="platform-sentiment"></div>
     </div></div>
   </div>
 </div>
 
-<h5>Top Keywords (Top 30)</h5>
+<h5>热门关键词 (前30)</h5>
 <div class="row mb-4">
   <div class="col-md-12">
     <div id="keywords-cloud" class="d-flex flex-wrap gap-2"></div>
   </div>
 </div>
 
-<h5>Daily Trend (Last 7 Days)</h5>
+<h5>每日趋势 (最近7天)</h5>
 <div class="row mb-4">
   <div class="col-md-8">
     <table class="table table-sm table-striped">
-      <thead><tr><th>Date</th><th>Total</th><th>Positive</th><th>Negative</th><th>Neutral</th></tr></thead>
+      <thead><tr><th>日期</th><th>总计</th><th>正面</th><th>负面</th><th>中性</th></tr></thead>
       <tbody id="daily-trend"></tbody>
     </table>
   </div>
@@ -62,7 +62,7 @@ async function loadAnalysis() {
             return Object.assign(document.createElement('div'), {
                 className: 'mb-2',
                 innerHTML: `<span class="badge" style="background:${sentColors[s.label]||'#6c757d'}">${escHtml(s.label)}</span>
-                    <span class="ms-2">${s.count} records (${pct}%)</span>
+                    <span class="ms-2">${s.count} 条记录 (${pct}%)</span>
                     <div class="progress mt-1" style="height:6px"><div class="progress-bar" style="width:${pct}%;background:${sentColors[s.label]||'#6c757d'}"></div></div>`
             });
         })
@@ -71,7 +71,7 @@ async function loadAnalysis() {
     // Sentiment by platform
     const ps = document.getElementById('platform-sentiment');
     const platforms = [...new Set(data.platform_sentiment.map(p => p.platform))];
-    ps.innerHTML = '<table class="table table-sm"><thead><tr><th>Platform</th><th>Positive</th><th>Negative</th><th>Neutral</th></tr></thead><tbody>' +
+    ps.innerHTML = '<table class="table table-sm"><thead><tr><th>平台</th><th>正面</th><th>负面</th><th>中性</th></tr></thead><tbody>' +
         platforms.map(plat => {
             const rows = data.platform_sentiment.filter(p => p.platform === plat);
             const pos = rows.find(r => r.sentiment==='positive')?.count || 0;
@@ -92,14 +92,14 @@ async function loadAnalysis() {
     const dt = document.getElementById('daily-trend');
     dt.innerHTML = data.daily_trend.map(d =>
         `<tr><td>${escHtml(d.day)}</td><td>${d.total}</td><td class="text-success">${d.positive}</td><td class="text-danger">${d.negative}</td><td class="text-secondary">${d.neutral}</td></tr>`
-    ).join('') || '<tr><td colspan="5" class="text-muted">No data</td></tr>';
+    ).join('') || '<tr><td colspan="5" class="text-muted">暂无数据</td></tr>';
 }
 
 async function runAnalysis() {
-    document.getElementById('analysis-result').textContent = 'Analyzing...';
+    document.getElementById('analysis-result').textContent = '分析中...';
     const resp = await fetch('/api/analysis/run', {method: 'POST'});
     const data = await resp.json();
-    document.getElementById('analysis-result').textContent = `Done, analyzed ${data.analyzed} records`;
+    document.getElementById('analysis-result').textContent = `完成，已分析 ${data.analyzed} 条记录`;
     loadAnalysis();
 }
 
