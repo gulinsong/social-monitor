@@ -61,8 +61,31 @@ class Monitor(BaseMonitor):
         cookies = self._get_cookies_for_playwright()
         if not cookies.get("web_session") or not cookies.get("a1"):
             return False
-        # API requires x-s signature, pure HTTP cannot verify
-        # Having web_session + a1 is considered valid
+        # Try a lightweight HTTP check — access homepage API
+        try:
+            import requests as req
+            s = req.Session()
+            s.headers.update({
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                              "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://www.xiaohongshu.com/",
+            })
+            cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
+            s.headers["Cookie"] = cookie_str
+            r = s.get("https://www.xiaohongshu.com/", timeout=10, allow_redirects=False)
+            # If redirected to login page, cookies are expired
+            if r.status_code in (301, 302) and "login" in (r.headers.get("Location", "")):
+                log.warning("[XHS] Cookie expired (redirected to login)")
+                conn = self._get_auth_conn()
+                conn.execute(
+                    "UPDATE platform_auth SET auth_status='expired' WHERE platform=?",
+                    (self.PLATFORM_NAME,),
+                )
+                conn.commit()
+                conn.close()
+                return False
+        except Exception as e:
+            log.warning("[XHS] Auth verification request failed: %s", e)
         conn = self._get_auth_conn()
         conn.execute(
             "UPDATE platform_auth SET auth_status='active', "

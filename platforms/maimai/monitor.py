@@ -67,6 +67,31 @@ class Monitor(BaseMonitor):
         if not (has_session or has_u):
             log.warning("[Maimai] Missing critical cookies")
             return False
+        # Actually verify by calling an API
+        try:
+            import requests as req
+            s = req.Session()
+            s.headers.update({
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                              "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://maimai.cn/",
+            })
+            s.cookies.update(cookies)
+            r = s.get("https://maimai.cn/community/api/common/get-company-circle-entry-list"
+                       "?__platform=community_web", timeout=10)
+            data = r.json()
+            if data.get("error_code") == 401 or "登录" in str(data.get("error_msg", "")):
+                log.warning("[Maimai] Cookie expired (API returned 401)")
+                conn = self._get_auth_conn()
+                conn.execute(
+                    "UPDATE platform_auth SET auth_status='expired' WHERE platform=?",
+                    (self.PLATFORM_NAME,),
+                )
+                conn.commit()
+                conn.close()
+                return False
+        except Exception as e:
+            log.warning("[Maimai] Auth verification request failed: %s", e)
         conn = self._get_auth_conn()
         conn.execute(
             "UPDATE platform_auth SET auth_status='active', "
